@@ -169,16 +169,16 @@ cp nodeskclaw-backend/.env.example nodeskclaw-backend/.env
 创建 Namespace、将 `.env` 上传为 K8s Secret、应用基础 Deployment + Service 清单：
 
 ```bash
-./deploy/cli.sh init                    # 默认 staging namespace
-./deploy/cli.sh init --prod             # 生产 namespace
+./deploy/init.sh --staging --context <CTX>  # 默认 staging namespace
+./deploy/init.sh --prod --context <CTX>     # 生产 namespace
 ```
 
-#### 4. 构建并部署
+#### 4. 发版并部署
 
 ```bash
-./deploy/cli.sh deploy                  # 构建全部镜像 + 滚动更新（staging）
-./deploy/cli.sh deploy --prod           # 部署到生产环境（需交互确认）
-./deploy/cli.sh deploy backend          # 只部署单个组件
+./deploy/release.sh create v0.9.0
+./deploy/deploy.sh deploy --tag v0.9.0 --staging --context <CTX>
+./deploy/deploy.sh deploy backend --tag v0.9.0 --staging --context <CTX>
 ```
 
 #### 5. 配置 Ingress
@@ -198,7 +198,7 @@ Ingress 定义了两个域名入口（按需配置）：
 | LLM Proxy    | `llm-proxy.example.com` | llm-proxy (80)                   |
 
 
-完整 CLI 用法、镜像标签规则和 release/promote 工作流见 [deploy/README.md](deploy/README.md)。
+完整发版与部署工作流见 [deploy/README.md](deploy/README.md)。
 
 ### 本地开发
 
@@ -274,18 +274,25 @@ Portal 地址 `http://localhost:4517` | `/api` 自动代理到后端。
 
 ### Kubernetes
 
-K8s 部署由 `deploy/cli.sh` 管理，标准流程为**先部署到 Staging，再推广到 Production**。
+K8s 发版和部署由独立脚本管理，标准流程为**先创建版本制品，再部署到 Staging，最后用同一个 tag 部署到 Production**。
 
-**Staging** -- 构建镜像、推送到 registry、滚动更新 Staging namespace：
+**创建版本制品** -- 构建镜像、推送到 registry、打 git tag、创建 GitHub Pre-release：
 
 ```bash
-./deploy/cli.sh deploy --tag v0.9.0
+./deploy/release.sh create v0.9.0
 ```
 
-**Production** -- 复用已推送的镜像，更新 Production namespace（不重新构建）：
+**Staging** -- 复用已发布镜像，更新 Staging namespace：
 
 ```bash
-./deploy/cli.sh promote v0.9.0
+./deploy/deploy.sh deploy --tag v0.9.0 --staging --context <CTX>
+```
+
+**Production** -- 部署同一镜像到 Production，然后将 Release 标记为正式版：
+
+```bash
+./deploy/deploy.sh deploy --tag v0.9.0 --prod --context <CTX>
+./deploy/release.sh finalize v0.9.0
 ```
 
 数据库迁移在新的后端 Pod 启动时自动执行。完整 CLI 用法见 [deploy/README.md](deploy/README.md)。
@@ -304,8 +311,8 @@ docker compose up -d --build           # 重新构建镜像
 如果拉取依赖（PyPI、npm、Debian/Alpine 软件包）较慢，可使用镜像源预设加速构建：
 
 ```bash
-# deploy/cli.sh 部署
-./deploy/cli.sh deploy --mirrors cn
+# release.sh 发版
+./deploy/release.sh create v0.9.0 --mirrors cn
 
 # docker compose 构建
 docker compose --env-file deploy/mirrors/cn.env up -d --build

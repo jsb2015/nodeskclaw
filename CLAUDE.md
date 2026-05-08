@@ -124,7 +124,7 @@ kubectl get deploy -n <namespace> --context <context-name>
 - **JSONC 配置文件解析前必须剥离行注释**
 - **NFS 路径需正确转换**（容器路径 ↔ 本地挂载路径）
 - **修改代码后必须搜索同源逻辑副本并同步修改**
-- **部署脚本必须由用户手动执行**，禁止 AI 直接运行 `deploy/cli.sh`
+- **发版/部署脚本必须由用户手动执行**，禁止 AI 直接运行 `deploy/release.sh`、`deploy/deploy.sh`、`deploy/init.sh`
 - **变更涉及 ≥1 个独立功能点时必须提示用户进入 Plan 模式**
 - **K8s 操作必须指定 `--context <name>`**，禁止依赖 current-context 默认值
 - **破坏性操作（删除 namespace/资源、数据库 DELETE、git force push）必须逐项确认**

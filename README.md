@@ -170,16 +170,16 @@ cp nodeskclaw-backend/.env.example nodeskclaw-backend/.env
 Creates the namespace, uploads `.env` as a K8s Secret, and applies base Deployment + Service manifests:
 
 ```bash
-./deploy/cli.sh init                    # Default: staging namespace
-./deploy/cli.sh init --prod             # Production namespace
+./deploy/init.sh --staging --context <CTX>  # Default: staging namespace
+./deploy/init.sh --prod --context <CTX>     # Production namespace
 ```
 
-#### 4. Build & Deploy
+#### 4. Release & Deploy
 
 ```bash
-./deploy/cli.sh deploy                  # Build all images + rolling update (staging)
-./deploy/cli.sh deploy --prod           # Deploy to production (interactive confirm)
-./deploy/cli.sh deploy backend          # Deploy a single component
+./deploy/release.sh create v0.9.0
+./deploy/deploy.sh deploy --tag v0.9.0 --staging --context <CTX>
+./deploy/deploy.sh deploy backend --tag v0.9.0 --staging --context <CTX>
 ```
 
 #### 5. Configure Ingress
@@ -199,7 +199,7 @@ The Ingress defines two hosts (configure as needed):
 | LLM Proxy | `llm-proxy.example.com` | llm-proxy (80)                   |
 
 
-See [deploy/README.md](deploy/README.md) for full CLI reference, image tagging, and the release/promote workflow.
+See [deploy/README.md](deploy/README.md) for full release and deployment workflow details.
 
 ### Local Development
 
@@ -275,18 +275,25 @@ Open `http://localhost:4517` and sign in with the printed credentials. You will 
 
 ### Kubernetes
 
-K8s deployments are managed by `deploy/cli.sh`. The typical workflow is **deploy to staging first, then promote to production**.
+K8s releases and deployments are managed by separate scripts. The typical workflow is **create a release artifact, deploy it to staging, then deploy the same tag to production**.
 
-**Staging** -- build images, push to registry, and rolling-update the staging namespace:
+**Create release artifacts** -- build images, push to registry, tag git, and create a GitHub Pre-release:
 
 ```bash
-./deploy/cli.sh deploy --tag v0.9.0
+./deploy/release.sh create v0.9.0
 ```
 
-**Production** -- reuse the already-pushed images and update the production namespace (no rebuild):
+**Staging** -- reuse the released images and update the staging namespace:
 
 ```bash
-./deploy/cli.sh promote v0.9.0
+./deploy/deploy.sh deploy --tag v0.9.0 --staging --context <CTX>
+```
+
+**Production** -- deploy the same images to production, then mark the release as final:
+
+```bash
+./deploy/deploy.sh deploy --tag v0.9.0 --prod --context <CTX>
+./deploy/release.sh finalize v0.9.0
 ```
 
 Database migrations run automatically when the new backend pod starts. See [deploy/README.md](deploy/README.md) for full CLI usage and options.
@@ -305,8 +312,8 @@ docker compose up -d --build           # Rebuild images
 If pulling dependencies (PyPI, npm, Debian/Alpine packages) is slow in your region, use a mirror preset to speed up builds:
 
 ```bash
-# deploy/cli.sh
-./deploy/cli.sh deploy --mirrors cn
+# release.sh
+./deploy/release.sh create v0.9.0 --mirrors cn
 
 # docker compose
 docker compose --env-file deploy/mirrors/cn.env up -d --build

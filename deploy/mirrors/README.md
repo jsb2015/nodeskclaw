@@ -10,10 +10,10 @@ Docker 构建过程中需要从 PyPI、npm、Debian/Alpine 软件源下载依赖
 
 ## 使用方式
 
-### deploy/cli.sh
+### deploy/release.sh
 
 ```bash
-./deploy/cli.sh deploy --mirrors cn
+./deploy/release.sh create v0.5.0 --mirrors cn
 ```
 
 或写入 `deploy/.env.local` 永久生效：
@@ -51,7 +51,7 @@ docker compose --env-file deploy/mirrors/cn.env up -d --build
 ```bash
 cp cn.env custom.env
 # 编辑 custom.env 中的 URL
-./deploy/cli.sh deploy --mirrors custom
+./deploy/release.sh create v0.5.0 --mirrors custom
 ```
 
 ## Docker Hub 基础镜像加速

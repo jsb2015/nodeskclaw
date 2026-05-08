@@ -622,7 +622,7 @@ UniqueConstraint("col_a", "col_b", name="uq_xxx")
 
 ## 部署脚本执行规则
 
-**禁止 AI 助手直接运行 `deploy/cli.sh` 或任何构建/部署命令。** 构建镜像和部署到集群必须由用户手动执行。
+**禁止 AI 助手直接运行 `deploy/release.sh`、`deploy/deploy.sh`、`deploy/init.sh` 或任何构建/部署命令。** 构建镜像、发版和部署到集群必须由用户手动执行。
 
 ### 必须做
 
@@ -632,7 +632,7 @@ UniqueConstraint("col_a", "col_b", name="uq_xxx")
 
 ### 严禁
 
-- **禁止通过 Shell 工具运行 `deploy/cli.sh`**
+- **禁止通过 Shell 工具运行 `deploy/release.sh`、`deploy/deploy.sh`、`deploy/init.sh`**
 - **禁止通过 Shell 工具运行 `docker build`、`docker push`**
 - **禁止通过 Shell 工具运行 `kubectl set image`、`kubectl rollout`**
 - **禁止以任何方式自动触发构建或部署流程**

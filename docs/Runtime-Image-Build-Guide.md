@@ -17,10 +17,11 @@ NoDeskClaw runs AI agent instances on **runtime engines**. Each engine ships as 
 
 ```
 nodeskclaw-artifacts/build.sh     ← Runtime engine images (this document)
-deploy/cli.sh                     ← Platform component images (backend / portal / admin / llm-proxy)
+deploy/release.sh                 ← Platform component release artifacts (backend / portal / admin / llm-proxy)
+deploy/deploy.sh                  ← Platform component K8s deployment
 ```
 
-These two build pipelines are completely independent.
+These pipelines are independent: `build.sh` builds runtime engine images, `deploy/release.sh` builds platform release artifacts, and `deploy/deploy.sh` only deploys an existing version to K8s.
 
 ### Two-Layer Image Structure
 

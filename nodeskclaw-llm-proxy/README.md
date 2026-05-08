@@ -63,23 +63,20 @@ uv run uvicorn app.main:app --port 8080 --reload
 
 ## 构建部署
 
-### 使用统一 CLI（推荐）
+### 使用发版/部署脚本（推荐）
 
 ```bash
-# 构建 + 推送 + 部署到 staging
-./deploy/cli.sh deploy proxy
+# 构建 + 推送版本镜像
+./deploy/release.sh create v0.1.0-beta.1
 
-# 仅构建推送，不更新 K8s
-./deploy/cli.sh deploy proxy --build-only
-
-# 使用指定 tag 更新 K8s（不重新构建）
-./deploy/cli.sh deploy proxy --deploy-only --tag v0.1.0-beta.1
+# 使用指定 tag 更新 staging K8s（不重新构建）
+./deploy/deploy.sh deploy proxy --tag v0.1.0-beta.1 --staging --context <CTX>
 
 # 部署到生产
-./deploy/cli.sh deploy proxy --prod
+./deploy/deploy.sh deploy proxy --tag v0.1.0-beta.1 --prod --context <CTX>
 ```
 
-`cli.sh` 从 `deploy/.env.local` 读取 REGISTRY 和 KUBE_CONTEXT 配置。
+脚本从 `deploy/.env.local` 读取 REGISTRY 和 KUBE_CONTEXT 配置，也可以用 `--context` 覆盖。
 
 ### 手动部署
 
