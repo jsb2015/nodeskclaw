@@ -895,18 +895,18 @@ async function handleDeploy() {
               v-for="spec in specPresets"
               :key="spec.key"
               :class="[
-                'p-4 rounded-xl border text-left transition-all',
+                'w-full min-w-0 h-auto shrink flex-col items-start justify-start p-4 rounded-xl border text-left whitespace-normal transition-all',
                 selectedSpec === spec.key
                   ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
                   : 'border-border bg-card hover:border-primary/20',
               ]"
               @click="selectSpec(spec.key)"
             >
-              <div class="font-medium text-sm">{{ spec.label }}</div>
-              <div class="text-xs text-muted-foreground mt-0.5">{{ spec.desc }}</div>
-              <div class="flex gap-3 mt-2 text-xs text-muted-foreground">
-                <span>{{ spec.cpu }} {{ t('orgSettings.specsCpuUnit') }}</span>
-                <span>{{ spec.memory }} GB</span>
+              <div class="w-full font-medium text-sm">{{ spec.label }}</div>
+              <div class="w-full text-xs text-muted-foreground mt-0.5 break-words leading-relaxed">{{ spec.desc }}</div>
+              <div class="w-full flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-muted-foreground">
+                <span class="whitespace-nowrap">{{ spec.cpu }} {{ t('orgSettings.specsCpuUnit') }}</span>
+                <span class="whitespace-nowrap">{{ spec.memory }} GB</span>
               </div>
             </Button>
           </div>
