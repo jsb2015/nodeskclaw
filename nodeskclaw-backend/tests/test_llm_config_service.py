@@ -61,6 +61,52 @@ async def test_build_hermes_provider_payload_uses_named_custom_provider(monkeypa
     }
 
 
+async def test_build_hermes_provider_payload_rewrites_docker_org_custom_provider(monkeypatch) -> None:
+    configs = [
+        SimpleNamespace(
+            provider="glm",
+            key_source="org",
+            selected_models=[{"id": "glm-5-turbo", "name": "glm-5-turbo"}],
+            base_url="https://open.bigmodel.cn/api/coding/paas/v4",
+            api_type="openai-completions",
+        )
+    ]
+    org_keys = {
+        "glm": SimpleNamespace(
+            provider="glm",
+            api_key="org-secret",
+            base_url="https://open.bigmodel.cn/api/coding/paas/v4",
+            api_type="openai-completions",
+        )
+    }
+
+    monkeypatch.setattr(llm_config_service.settings, "LLM_PROXY_INTERNAL_URL", "http://llm-proxy:8080")
+    monkeypatch.setattr(llm_config_service.settings, "LLM_PROXY_URL", "http://localhost:4511")
+
+    providers, env_updates, primary = await llm_config_service._build_hermes_provider_payload(
+        configs,
+        wp_api_key="wp-token",
+        user_keys={},
+        org_keys=org_keys,
+        use_external_proxy=False,
+        compute_provider="docker",
+    )
+
+    assert providers == [{
+        "name": "nodeskclaw-glm",
+        "base_url": "http://host.docker.internal:4511/glm/v1",
+        "key_env": "NODESKCLAW_WP_API_KEY",
+        "api_mode": "chat_completions",
+        "model": "glm-5-turbo",
+    }]
+    assert env_updates == {"NODESKCLAW_WP_API_KEY": "wp-token"}
+    assert primary == {
+        "provider": "custom:nodeskclaw-glm",
+        "base_url": "http://host.docker.internal:4511/glm/v1",
+        "model": "glm-5-turbo",
+    }
+
+
 async def test_build_hermes_provider_payload_keeps_personal_provider_direct() -> None:
     configs = [
         SimpleNamespace(
@@ -86,6 +132,52 @@ async def test_build_hermes_provider_payload_keeps_personal_provider_direct() ->
         user_keys=user_keys,
         org_keys={},
         use_external_proxy=False,
+    )
+
+    assert providers == [{
+        "name": "nodeskclaw-personal-openai",
+        "base_url": "https://personal.example.com/v1",
+        "key_env": "NODESKCLAW_PERSONAL_OPENAI_API_KEY",
+        "api_mode": "chat_completions",
+        "model": "gpt-4.1-mini",
+    }]
+    assert env_updates == {"NODESKCLAW_PERSONAL_OPENAI_API_KEY": "personal-secret"}
+    assert primary == {
+        "provider": "custom:nodeskclaw-personal-openai",
+        "base_url": "https://personal.example.com/v1",
+        "model": "gpt-4.1-mini",
+    }
+
+
+async def test_build_hermes_provider_payload_keeps_docker_personal_provider_direct(monkeypatch) -> None:
+    configs = [
+        SimpleNamespace(
+            provider="personal-openai",
+            key_source="personal",
+            selected_models=[{"id": "gpt-4.1-mini", "name": "GPT-4.1 mini"}],
+            base_url="https://personal.example.com/v1",
+            api_type="openai-completions",
+        )
+    ]
+    user_keys = {
+        "personal-openai": SimpleNamespace(
+            provider="personal-openai",
+            api_key="personal-secret",
+            base_url="https://personal.example.com/v1",
+            api_type="openai-completions",
+        )
+    }
+
+    monkeypatch.setattr(llm_config_service.settings, "LLM_PROXY_INTERNAL_URL", "http://llm-proxy:8080")
+    monkeypatch.setattr(llm_config_service.settings, "LLM_PROXY_URL", "http://localhost:4511")
+
+    providers, env_updates, primary = await llm_config_service._build_hermes_provider_payload(
+        configs,
+        wp_api_key="wp-token",
+        user_keys=user_keys,
+        org_keys={},
+        use_external_proxy=False,
+        compute_provider="docker",
     )
 
     assert providers == [{
@@ -145,6 +237,53 @@ async def test_build_hermes_provider_payload_uses_org_gemini_allowed_model(monke
     assert primary == {
         "provider": "custom:nodeskclaw-gemini",
         "base_url": "http://llm-proxy.internal:4100/gemini",
+        "model": "gemini-2.5-flash",
+    }
+
+
+async def test_build_hermes_provider_payload_rewrites_docker_gemini_without_v1(monkeypatch) -> None:
+    configs = [
+        SimpleNamespace(
+            provider="gemini",
+            key_source="org",
+            selected_models=None,
+            base_url=None,
+            api_type=None,
+        )
+    ]
+    org_keys = {
+        "gemini": SimpleNamespace(
+            provider="gemini",
+            api_key="org-real-key",
+            base_url="https://generativelanguage.googleapis.com",
+            api_type="google-generative-ai",
+            allowed_models=["gemini-2.5-flash"],
+        )
+    }
+
+    monkeypatch.setattr(llm_config_service.settings, "LLM_PROXY_INTERNAL_URL", "http://llm-proxy:8080")
+    monkeypatch.setattr(llm_config_service.settings, "LLM_PROXY_URL", "http://localhost:4511")
+
+    providers, env_updates, primary = await llm_config_service._build_hermes_provider_payload(
+        configs,
+        wp_api_key="wp-token",
+        user_keys={},
+        org_keys=org_keys,
+        use_external_proxy=False,
+        compute_provider="docker",
+    )
+
+    assert providers == [{
+        "name": "nodeskclaw-gemini",
+        "base_url": "http://host.docker.internal:4511/gemini",
+        "key_env": "NODESKCLAW_WP_API_KEY",
+        "api_mode": "chat_completions",
+        "model": "gemini-2.5-flash",
+    }]
+    assert env_updates == {"NODESKCLAW_WP_API_KEY": "wp-token"}
+    assert primary == {
+        "provider": "custom:nodeskclaw-gemini",
+        "base_url": "http://host.docker.internal:4511/gemini",
         "model": "gemini-2.5-flash",
     }
 
