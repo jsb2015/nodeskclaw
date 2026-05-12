@@ -248,6 +248,7 @@ async def test_agent_auth_can_read_workspace_chat_history(monkeypatch, agent_act
             sender_name="Alice",
             content="hello",
             message_type="chat",
+            conversation_id="conv-1",
             attachments=[],
             created_at=None,
         )
