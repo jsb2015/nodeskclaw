@@ -11,7 +11,7 @@ import api from '@/services/api'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
 import type { InstanceSkillItem, InstanceGeneItem, GenomeItem } from '@/stores/gene'
-import { getRuntimeCaps } from '@/utils/runtimeCapabilities'
+import { getRuntimeCaps, getRuntimeDefaultCapabilities } from '@/utils/runtimeCapabilities'
 import { copyToClipboard } from '@/utils/clipboard'
 import { formatDate } from '@/utils/localeFormat'
 import { Button } from '@/components/ui/button'
@@ -68,6 +68,7 @@ const skills = ref<InstanceSkillItem[]>([])
 const instanceGenes = ref<InstanceGeneItem[]>([])
 const appliedGenomes = ref<GenomeItem[]>([])
 const genesLoading = ref(false)
+const defaultCapabilities = computed(() => getRuntimeDefaultCapabilities(instance.value?.runtime ?? 'openclaw'))
 
 const geneStatusClass: Record<string, string> = {
   installed: 'bg-green-500/10 text-green-500',
@@ -457,6 +458,23 @@ onUnmounted(stopPolling)
                 <div class="flex items-center gap-2 text-xs text-amber-400">
                   <Loader2 class="w-3.5 h-3.5 animate-spin" />
                   {{ t('agentDetailDialog.restarting') }}
+                </div>
+              </div>
+
+              <!-- Default Capabilities -->
+              <div v-if="defaultCapabilities.length" class="p-3 rounded-lg border border-border bg-card">
+                <h4 class="text-xs font-medium text-muted-foreground mb-2">{{ t('agentDetailDialog.defaultCapabilities') }}</h4>
+                <div class="space-y-1.5">
+                  <div
+                    v-for="capability in defaultCapabilities"
+                    :key="capability.id"
+                    class="p-2 rounded-md bg-muted/30"
+                  >
+                    <div class="text-xs font-medium">{{ t(capability.labelKey) }}</div>
+                    <div class="text-[10px] text-muted-foreground mt-0.5 leading-relaxed">
+                      {{ t(capability.descriptionKey) }}
+                    </div>
+                  </div>
                 </div>
               </div>
 

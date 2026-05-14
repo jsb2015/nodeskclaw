@@ -13,6 +13,7 @@ import { getStatusDisplay } from '@/utils/instanceStatus'
 import { copyToClipboard } from '@/utils/clipboard'
 import { formatDateTime, formatNumber } from '@/utils/localeFormat'
 import { buildEngineInfoMap } from '@/utils/instanceFlow'
+import { getRuntimeDefaultCapabilities } from '@/utils/runtimeCapabilities'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
@@ -69,6 +70,7 @@ interface EngineInfo {
 }
 const ENGINE_INFO: Record<string, EngineInfo> = buildEngineInfoMap(t)
 const engineInfo = computed(() => ENGINE_INFO[instance.value?.runtime ?? 'openclaw'] ?? null)
+const defaultCapabilities = computed(() => getRuntimeDefaultCapabilities(instance.value?.runtime ?? 'openclaw'))
 const loading = ref(true)
 const pageError = ref('')
 const gatewayToken = ref('')
@@ -497,6 +499,22 @@ function toggleSkillEditor() {
               rel="noopener"
               class="ml-2 text-primary hover:underline font-mono text-xs"
             >{{ instance.endpoint_url }}</a>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="defaultCapabilities.length" class="p-4 rounded-xl border border-border bg-card">
+        <h2 class="text-sm font-medium mb-3">{{ t('agentDetailDialog.defaultCapabilities') }}</h2>
+        <div class="grid gap-2 sm:grid-cols-3">
+          <div
+            v-for="capability in defaultCapabilities"
+            :key="capability.id"
+            class="rounded-lg bg-muted/30 p-3"
+          >
+            <div class="text-sm font-medium">{{ t(capability.labelKey) }}</div>
+            <div class="text-xs text-muted-foreground mt-1 leading-relaxed">
+              {{ t(capability.descriptionKey) }}
+            </div>
           </div>
         </div>
       </div>

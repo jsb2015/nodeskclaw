@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import sys
 from pathlib import Path
@@ -313,6 +314,94 @@ def test_shared_files_tool_returns_error_without_workspace(monkeypatch):
 
     assert payload["error"] is True
     assert "Workspace context is missing" in payload["message"]
+
+
+def test_shared_files_upload_encodes_text_content(monkeypatch):
+    recorded = {}
+
+    def fake_api_fetch(cfg, path, *, method="GET", body=None):
+        recorded["path"] = path
+        recorded["method"] = method
+        recorded["body"] = body
+        return {
+            "code": 0,
+            "data": {
+                "id": "file-1",
+                "name": body["filename"],
+                "parent_path": body["parent_path"],
+            },
+        }
+
+    monkeypatch.setenv("NODESKCLAW_WORKSPACE_ID", "ws-1")
+    monkeypatch.setenv("NODESKCLAW_TOKEN", "tok")
+    monkeypatch.setenv("NODESKCLAW_API_URL", "http://example.test/api/v1")
+    monkeypatch.setattr(plugin, "_api_fetch", fake_api_fetch)
+    plugin._on_post_tool_call()
+
+    payload = json.loads(
+        plugin.shared_files_tool(
+            {
+                "action": "upload",
+                "filename": "daily-tech-news.md",
+                "content": "# 科技新闻\n\n中文内容",
+                "parent_path": "/news",
+                "content_type": "text/markdown",
+            }
+        )
+    )
+
+    assert recorded["path"] == "/workspaces/ws-1/blackboard/files/upload"
+    assert recorded["method"] == "POST"
+    assert recorded["body"]["filename"] == "daily-tech-news.md"
+    assert recorded["body"]["parent_path"] == "/news"
+    assert recorded["body"]["content_type"] == "text/markdown"
+    assert base64.b64decode(recorded["body"]["content"]).decode("utf-8") == "# 科技新闻\n\n中文内容"
+    assert payload["data"]["file_id"] == "file-1"
+    assert payload["data"]["filename"] == "daily-tech-news.md"
+
+
+def test_shared_files_mkdir_splits_path_for_backend(monkeypatch):
+    recorded = {}
+
+    def fake_api_fetch(cfg, path, *, method="GET", body=None):
+        recorded["path"] = path
+        recorded["method"] = method
+        recorded["body"] = body
+        return {"code": 0, "data": {"id": "dir-1"}}
+
+    monkeypatch.setenv("NODESKCLAW_WORKSPACE_ID", "ws-1")
+    monkeypatch.setenv("NODESKCLAW_TOKEN", "tok")
+    monkeypatch.setenv("NODESKCLAW_API_URL", "http://example.test/api/v1")
+    monkeypatch.setattr(plugin, "_api_fetch", fake_api_fetch)
+    plugin._on_post_tool_call()
+
+    payload = json.loads(plugin.shared_files_tool({"action": "mkdir", "path": "/reports/2026"}))
+
+    assert payload == {"code": 0, "data": {"id": "dir-1"}}
+    assert recorded["path"] == "/workspaces/ws-1/blackboard/files/mkdir"
+    assert recorded["method"] == "POST"
+    assert recorded["body"] == {"parent_path": "/reports/", "name": "2026"}
+
+
+def test_shared_files_tool_keeps_backend_error(monkeypatch):
+    def fake_api_fetch(cfg, path, *, method="GET", body=None):
+        return {
+            "error": True,
+            "status": 400,
+            "message": '{"detail":{"message_key":"errors.file.invalid_base64","message":"文件内容不是有效的 Base64"}}',
+        }
+
+    monkeypatch.setenv("NODESKCLAW_WORKSPACE_ID", "ws-1")
+    monkeypatch.setenv("NODESKCLAW_TOKEN", "tok")
+    monkeypatch.setenv("NODESKCLAW_API_URL", "http://example.test/api/v1")
+    monkeypatch.setattr(plugin, "_api_fetch", fake_api_fetch)
+    plugin._on_post_tool_call()
+
+    payload = json.loads(plugin.shared_files_tool({"action": "upload", "content": "hello"}))
+
+    assert payload["error"] is True
+    assert payload["status"] == 400
+    assert "errors.file.invalid_base64" in payload["message"]
 
 
 # ── _ThinkingPreambleFilter tests ─────────────────────

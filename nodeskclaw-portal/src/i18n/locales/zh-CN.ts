@@ -879,6 +879,14 @@ const zhCN = {
       loadFailed: "加载技能内容失败",
     },
   },
+  runtimeDefaultCapabilities: {
+    sharedFiles: "黑板 Files",
+    sharedFilesDesc: "可把文件上传到办公室黑板，供其他成员读取",
+    blackboard: "黑板",
+    blackboardDesc: "可读写任务、目标和黑板内容",
+    topology: "拓扑",
+    topologyDesc: "可读取办公室成员和可达关系",
+  },
   instanceRuntime: {
     title: "运行状态",
     runtimeInstance: "运行实例",
@@ -1628,6 +1636,7 @@ const zhCN = {
     restartFailed: "重启失败",
     delete: "删除 AI 员工",
     deleting: "删除中...",
+    defaultCapabilities: "默认能力",
     installedGenes: "已安装技能基因",
     appliedGenomes: "已应用技能基因组",
     viewAll: "查看全部",
@@ -1681,6 +1690,9 @@ const zhCN = {
       forbidden: "无权限",
       bad_request: "请求参数错误",
       conflict: "资源冲突",
+    },
+    file: {
+      invalid_base64: "文件内容格式错误，请重新上传文件",
     },
     system: {
       internal_error: "服务器内部错误",

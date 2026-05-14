@@ -9,8 +9,10 @@ from fastapi import HTTPException
 from app.api import blackboard
 from app.api import corridors
 from app.api import workspaces
+from app.core.exceptions import BadRequestError
 from app.core.security import AuthActor, _auth_actor
-from app.schemas.workspace import CollaborationSendRequest
+from app.schemas.workspace import CollaborationSendRequest, FileWriteRequest
+from app.services import workspace_service
 
 
 class _ScalarResult:
@@ -478,6 +480,55 @@ async def test_agent_auth_can_write_shared_files(monkeypatch, agent_actor):
     assert response["data"]["id"] == "dir-1"
     workspaces.wm_service.check_workspace_access.assert_not_awaited()
     create_shared_directory.assert_awaited_once()
+
+
+async def test_agent_auth_can_upload_shared_files(monkeypatch, agent_actor):
+    monkeypatch.setattr(
+        workspaces.wm_service,
+        "check_workspace_access",
+        AsyncMock(side_effect=_unexpected_workspace_access_check),
+    )
+    monkeypatch.setattr(blackboard, "_enforce_agent_blackboard_topology", AsyncMock())
+    monkeypatch.setattr(blackboard, "_broadcast", lambda *_args, **_kwargs: None)
+    upload_shared_file = AsyncMock(return_value=_Dump({"id": "file-1"}))
+    monkeypatch.setattr(blackboard.workspace_service, "upload_shared_file", upload_shared_file)
+
+    response = await blackboard.upload_file(
+        "ws-1",
+        data=FileWriteRequest(
+            filename="daily-tech-news.md",
+            content="IyDnp5HmioDmlrDpl7g=",
+            parent_path="/news",
+            content_type="text/markdown",
+        ),
+        db=_WorkspaceAgentDb(has_agent=True),
+        user=SimpleNamespace(id="user-1"),
+    )
+
+    assert response["code"] == 0
+    assert response["data"]["id"] == "file-1"
+    workspaces.wm_service.check_workspace_access.assert_not_awaited()
+    upload_shared_file.assert_awaited_once()
+
+
+async def test_upload_shared_file_rejects_invalid_base64():
+    with pytest.raises(BadRequestError) as exc:
+        await workspace_service.upload_shared_file(
+            None,
+            "ws-1",
+            "agent",
+            "inst-1",
+            "Hermes",
+            FileWriteRequest(
+                filename="daily-tech-news.md",
+                content="not base64",
+                parent_path="/news",
+                content_type="text/markdown",
+            ),
+        )
+
+    assert exc.value.status_code == 400
+    assert exc.value.message_key == "errors.file.invalid_base64"
 
 
 async def test_user_auth_reads_shared_files_through_workspace_member(monkeypatch, user_actor):

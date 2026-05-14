@@ -879,6 +879,14 @@ const enUS = {
       loadFailed: "Failed to load skill content",
     },
   },
+  runtimeDefaultCapabilities: {
+    sharedFiles: "Blackboard Files",
+    sharedFilesDesc: "Upload files to the office blackboard for other members to read",
+    blackboard: "Blackboard",
+    blackboardDesc: "Read and update tasks, objectives, and blackboard content",
+    topology: "Topology",
+    topologyDesc: "Read office members and reachable relationships",
+  },
   instanceRuntime: {
     title: "Runtime Status",
     runtimeInstance: "Runtime Instance",
@@ -1628,6 +1636,7 @@ const enUS = {
     restartFailed: "Failed to restart",
     delete: "Delete AI Employee",
     deleting: "Deleting...",
+    defaultCapabilities: "Default Capabilities",
     installedGenes: "Installed Skill Genes",
     appliedGenomes: "Applied Skill Genomes",
     viewAll: "View All",
@@ -1681,6 +1690,9 @@ const enUS = {
       forbidden: "Permission denied",
       bad_request: "Invalid request parameters",
       conflict: "Resource conflict",
+    },
+    file: {
+      invalid_base64: "File content format is invalid. Please upload the file again.",
     },
     system: {
       internal_error: "Internal server error",
