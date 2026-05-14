@@ -5,6 +5,7 @@ import { Users, RefreshCw, Loader2, AlertTriangle, ExternalLink, Clock, Coins, T
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useI18n } from 'vue-i18n'
 import { formatNumber as formatLocaleNumber } from '@/utils/localeFormat'
+import { Button } from '@/components/ui/button'
 
 interface ScheduleReliability {
   schedule_id: string
@@ -106,7 +107,7 @@ defineExpose({ refresh: load })
         <Users class="w-4 h-4" />
         {{ t('blackboard.agentPerf.title') }}
       </h3>
-      <button
+      <Button variant="unstyled" size="unstyled"
         class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
         :disabled="loading"
         @click="load"
@@ -114,7 +115,7 @@ defineExpose({ refresh: load })
         <Loader2 v-if="loading" class="w-3 h-3 animate-spin" />
         <RefreshCw v-else class="w-3 h-3" />
         {{ t('blackboard.refresh') }}
-      </button>
+      </Button>
     </div>
 
     <div v-if="loading" class="flex justify-center py-6">
@@ -149,14 +150,14 @@ defineExpose({ refresh: load })
               />
               <span class="text-sm font-medium">{{ agent.agent_name }}</span>
             </div>
-            <button
+            <Button variant="unstyled" size="unstyled"
               v-if="agent.other_workspace_count > 0"
               class="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
               @click="goGlobal"
             >
               {{ t('blackboard.agentPerf.otherWorkspaces', { n: agent.other_workspace_count }) }}
               <ExternalLink class="w-3 h-3" />
-            </button>
+            </Button>
           </div>
 
           <div class="px-4 py-3 space-y-3">

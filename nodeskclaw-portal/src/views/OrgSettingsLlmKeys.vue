@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useOrgStore } from '@/stores/org'
-import { Settings, Loader2, KeyRound, Check, X, Save, Plus, Trash2, ChevronDown, Zap, CheckCircle, XCircle } from 'lucide-vue-next'
+import { Settings, Loader2, KeyRound, Check, X, Save, Plus, Trash2, Zap, CheckCircle, XCircle } from 'lucide-vue-next'
 import BaseUrlInput from '@/components/shared/BaseUrlInput.vue'
 import api from '@/services/api'
 import { useToast } from '@/composables/useToast'
@@ -12,6 +12,16 @@ import { PROVIDERS, PROVIDER_LABELS, WP_PROVIDERS, ALL_KNOWN_PROVIDERS } from '@
 import { useEdition } from '@/composables/useFeature'
 import ModelSelect from '@/components/shared/ModelSelect.vue'
 import type { ModelItem } from '@/components/shared/ModelSelect.vue'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 const { t } = useI18n()
 const orgStore = useOrgStore()
@@ -420,11 +430,9 @@ onMounted(async () => {
                 :key="model.id"
                 class="flex items-center gap-2 px-3 py-2 rounded-md border border-border hover:bg-muted/50 transition-colors cursor-pointer text-sm"
               >
-                <input
-                  type="checkbox"
+                <Checkbox
                   :checked="wpSelectedModels[wp]?.has(model.id)"
-                  class="accent-primary"
-                  @change="toggleWpModel(wp, model.id)"
+                  @update:checked="toggleWpModel(wp, model.id)"
                 />
                 {{ model.name }}
               </label>
@@ -433,7 +441,7 @@ onMounted(async () => {
               <Loader2 class="w-4 h-4 animate-spin text-muted-foreground" />
             </div>
             <div class="flex justify-end">
-              <button
+              <Button variant="unstyled" size="unstyled"
                 class="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 :disabled="wpSaving[wp]"
                 @click="saveAllowedModels(wp)"
@@ -441,7 +449,7 @@ onMounted(async () => {
                 <Loader2 v-if="wpSaving[wp]" class="w-3.5 h-3.5 animate-spin" />
                 <Save v-else class="w-3.5 h-3.5" />
                 {{ t('common.save') }}
-              </button>
+              </Button>
             </div>
           </template>
 
@@ -504,30 +512,30 @@ onMounted(async () => {
             </div>
           </div>
           <div class="flex items-center gap-2 mt-3">
-            <button
+            <Button variant="unstyled" size="unstyled"
               class="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md border border-border text-sm hover:bg-muted transition-colors"
               @click="openConfigure(providerName)"
             >
               <Settings class="w-3.5 h-3.5" />
               {{ t('orgSettings.llmKeysSettings') }}
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled" size="unstyled"
               class="px-3 py-1.5 rounded-md text-sm text-destructive hover:bg-destructive/10 transition-colors"
               @click="handleDelete(providerName)"
             >
               {{ t('common.delete') }}
-            </button>
+            </Button>
           </div>
         </template>
 
         <template v-else>
           <div class="text-xs text-muted-foreground/60 mb-3">{{ t('orgSettings.llmKeysNotConfigured') }}</div>
-          <button
+          <Button variant="unstyled" size="unstyled"
             class="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors"
             @click="openConfigure(providerName)"
           >
             {{ t('orgSettings.llmKeysConfigure') }}
-          </button>
+          </Button>
         </template>
       </div>
     </div>
@@ -568,19 +576,19 @@ onMounted(async () => {
             </div>
           </div>
           <div class="flex items-center gap-2">
-            <button
+            <Button variant="unstyled" size="unstyled"
               class="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md border border-border text-sm hover:bg-muted transition-colors"
               @click="openConfigure(cp.provider)"
             >
               <Settings class="w-3.5 h-3.5" />
               {{ t('orgSettings.llmKeysSettings') }}
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled" size="unstyled"
               class="px-3 py-1.5 rounded-md text-sm text-destructive hover:bg-destructive/10 transition-colors"
               @click="handleDelete(cp.provider)"
             >
               <Trash2 class="w-3.5 h-3.5" />
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -588,7 +596,7 @@ onMounted(async () => {
         <div v-if="showCustomForm" class="rounded-lg border border-dashed border-violet-400/50 bg-card p-4 space-y-3">
           <div class="space-y-1.5">
             <label class="text-sm font-medium">{{ t('orgSettings.customProviderSlug') }}</label>
-            <input
+            <Input
               v-model="customSlug"
               class="w-full px-3 py-2 rounded-md border border-border bg-background text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary/50"
               :placeholder="t('orgSettings.customProviderSlugHint')"
@@ -597,29 +605,29 @@ onMounted(async () => {
             <p v-if="customSlugError" class="text-xs text-destructive">{{ customSlugError }}</p>
           </div>
           <div class="flex items-center gap-2">
-            <button
+            <Button variant="unstyled" size="unstyled"
               class="px-4 py-1.5 rounded-md bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors"
               @click="addCustomProvider"
             >
               {{ t('common.next') }}
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled" size="unstyled"
               class="px-4 py-1.5 rounded-md border border-border text-sm hover:bg-muted transition-colors"
               @click="showCustomForm = false; customSlug = ''; customSlugError = ''"
             >
               {{ t('common.cancel') }}
-            </button>
+            </Button>
           </div>
         </div>
 
-        <button
+        <Button variant="unstyled" size="unstyled"
           v-if="!showCustomForm"
           class="w-full px-4 py-3 rounded-lg border border-dashed border-violet-400/50 bg-card text-sm text-violet-400 hover:border-violet-400 hover:bg-violet-500/5 transition-colors flex items-center justify-center gap-1.5"
           @click="showCustomForm = true"
         >
           <Plus class="w-4 h-4" />
           {{ t('orgSettings.customProviderAdd') }}
-        </button>
+        </Button>
       </div>
     </div>
 
@@ -640,7 +648,7 @@ onMounted(async () => {
             <template v-if="isCustomProvider(dialogProvider)">
               <div class="space-y-1.5">
                 <label class="text-sm font-medium">{{ t('orgSettings.customProviderLabel') }}</label>
-                <input
+                <Input
                   v-model="form.label"
                   class="w-full px-3 py-2 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
                   :placeholder="t('orgSettings.customProviderLabelPlaceholder')"
@@ -648,21 +656,22 @@ onMounted(async () => {
               </div>
               <div class="space-y-1.5">
                 <label class="text-sm font-medium">{{ t('orgSettings.customProviderApiType') }}</label>
-                <div class="relative">
-                  <select
-                    v-model="form.api_type"
-                    class="w-full appearance-none px-3 py-2 pr-8 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
-                  >
-                    <option v-for="opt in API_TYPE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-                  </select>
-                  <ChevronDown class="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                </div>
+                <Select v-model="form.api_type">
+                  <SelectTrigger class="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="opt in API_TYPE_OPTIONS" :key="opt.value" :value="opt.value">
+                      {{ opt.label }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </template>
 
             <div class="space-y-1.5">
               <label class="text-sm font-medium">{{ t('orgSettings.llmKeysApiKey') }}</label>
-              <input
+              <Input
                 v-model="form.api_key"
                 type="password"
                 class="w-full px-3 py-2 rounded-md border border-border bg-background text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary/50"
@@ -680,7 +689,7 @@ onMounted(async () => {
                 :placeholder="isCustomProvider(dialogProvider) ? t('orgSettings.customProviderBaseUrlRequired') : t('orgSettings.llmKeysBaseUrlPlaceholder')"
               />
               <label v-if="form.base_url" class="flex items-center gap-2 mt-1.5 cursor-pointer">
-                <input type="checkbox" v-model="form.skip_ssl_verify" class="accent-primary" />
+                <Checkbox v-model:checked="form.skip_ssl_verify" />
                 <span class="text-sm">{{ t('orgSettings.llmKeysSkipSslVerify') }}</span>
                 <span class="text-xs text-muted-foreground">{{ t('orgSettings.llmKeysSkipSslVerifyHint') }}</span>
               </label>
@@ -696,7 +705,7 @@ onMounted(async () => {
             <div class="grid gap-3" :class="isEE ? 'grid-cols-2' : 'grid-cols-1'">
               <div v-if="isEE" class="space-y-1.5">
                 <label class="text-sm font-medium">{{ t('orgSettings.llmKeysOrgTokenLimit') }}</label>
-                <input
+                <Input
                   v-model="form.org_token_limit"
                   type="number"
                   class="w-full px-3 py-2 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
@@ -705,7 +714,7 @@ onMounted(async () => {
               </div>
               <div class="space-y-1.5">
                 <label class="text-sm font-medium">{{ isEE ? t('orgSettings.llmKeysSysTokenLimit') : t('orgSettings.llmKeysTokenLimit') }}</label>
-                <input
+                <Input
                   v-model="form.system_token_limit"
                   type="number"
                   class="w-full px-3 py-2 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
@@ -715,7 +724,7 @@ onMounted(async () => {
             </div>
 
             <div v-if="isEditing" class="flex items-center gap-2">
-              <input type="checkbox" id="edit-active" v-model="form.is_active" class="accent-primary" />
+              <Checkbox id="edit-active" v-model:checked="form.is_active" />
               <label for="edit-active" class="text-sm cursor-pointer">{{ t('orgSettings.llmKeysStatusActive') }}</label>
             </div>
           </div>
@@ -737,7 +746,7 @@ onMounted(async () => {
           </div>
 
           <div class="flex items-center justify-between px-6 py-4 mt-2">
-            <button
+            <Button variant="unstyled" size="unstyled"
               class="flex items-center gap-1.5 px-3 py-2 rounded-md border border-border text-sm hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               :disabled="!canTest || testing"
               @click="handleTest"
@@ -745,15 +754,15 @@ onMounted(async () => {
               <Loader2 v-if="testing" class="w-3.5 h-3.5 animate-spin" />
               <Zap v-else class="w-3.5 h-3.5" />
               {{ testing ? t('orgSettings.llmTestConnectionTesting') : t('orgSettings.llmTestConnection') }}
-            </button>
+            </Button>
             <div class="flex gap-2">
-              <button
+              <Button variant="unstyled" size="unstyled"
                 class="px-4 py-2 rounded-md border border-border text-sm hover:bg-muted transition-colors"
                 @click="showDialog = false"
               >
                 {{ t('common.cancel') }}
-              </button>
-              <button
+              </Button>
+              <Button variant="unstyled" size="unstyled"
                 class="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 :disabled="!canSave || saving"
                 @click="handleSave"
@@ -763,7 +772,7 @@ onMounted(async () => {
                   {{ t('common.saving') }}
                 </span>
                 <span v-else>{{ t('common.save') }}</span>
-              </button>
+              </Button>
             </div>
           </div>
         </div>

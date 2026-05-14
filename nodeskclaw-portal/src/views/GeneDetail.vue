@@ -35,6 +35,7 @@ import { getRuntimeCaps } from '@/utils/runtimeCapabilities'
 import { useGeneStore } from '@/stores/gene'
 import type { GeneItem, GenomeItem } from '@/stores/gene'
 import api from '@/services/api'
+import { Button } from '@/components/ui/button'
 
 const route = useRoute()
 const router = useRouter()
@@ -251,13 +252,13 @@ function selectInstance(instanceId: string) {
     <!-- 固定 header -->
     <div class="shrink-0 border-b border-border">
       <div class="max-w-4xl mx-auto px-6 pt-6 pb-4">
-        <button
+        <Button variant="unstyled" size="unstyled"
           class="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-4"
           @click="goBack"
         >
           <ArrowLeft class="w-4 h-4" />
           {{ t('gene.backToMarket') }}
-        </button>
+        </Button>
 
         <div v-if="store.loading" class="flex justify-center py-4">
           <Loader2 class="w-6 h-6 animate-spin text-muted-foreground" />
@@ -297,13 +298,13 @@ function selectInstance(instanceId: string) {
               </span>
             </div>
           </div>
-          <button
+          <Button variant="unstyled" size="unstyled"
             class="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
             @click="openInstallDialog"
           >
             <Download class="w-4 h-4" />
             {{ t('gene.learn') }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -348,7 +349,7 @@ function selectInstance(instanceId: string) {
             <div class="flex items-center justify-between mb-3">
               <h2 class="text-lg font-semibold">{{ t('gene.content') }}</h2>
               <div class="flex items-center gap-1 rounded-lg border border-border p-0.5">
-                <button
+                <Button variant="unstyled" size="unstyled"
                   :class="[
                     'p-1.5 rounded-md transition-colors',
                     contentViewMode === 'rendered' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground',
@@ -357,8 +358,8 @@ function selectInstance(instanceId: string) {
                   @click="contentViewMode = 'rendered'"
                 >
                   <FileText class="w-4 h-4" />
-                </button>
-                <button
+                </Button>
+                <Button variant="unstyled" size="unstyled"
                   :class="[
                     'p-1.5 rounded-md transition-colors',
                     contentViewMode === 'source' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground',
@@ -367,7 +368,7 @@ function selectInstance(instanceId: string) {
                   @click="contentViewMode = 'source'"
                 >
                   <Code class="w-4 h-4" />
-                </button>
+                </Button>
               </div>
             </div>
             <div
@@ -590,12 +591,12 @@ function selectInstance(instanceId: string) {
         >
           <div class="flex items-center justify-between mb-4">
             <h3 class="text-lg font-semibold">{{ t('gene.selectInstance') }}</h3>
-            <button
+            <Button variant="unstyled" size="unstyled"
               class="p-1.5 rounded-lg hover:bg-muted transition-colors"
               @click="closeInstallDialog"
             >
               <X class="w-4 h-4" />
-            </button>
+            </Button>
           </div>
           <p class="text-sm text-muted-foreground mb-4">
             {{ t('gene.selectInstanceHint', { slug: gene?.slug ?? '' }) }}
@@ -612,7 +613,7 @@ function selectInstance(instanceId: string) {
               <div v-if="availableInstances.length > 0">
                 <p class="text-xs text-muted-foreground mb-2 px-1">{{ t('gene.available') }}</p>
                 <div class="space-y-1.5">
-                  <button
+                  <Button variant="unstyled" size="unstyled"
                     v-for="inst in availableInstances"
                     :key="inst.id"
                     :disabled="inst.status !== 'running' && inst.status !== 'learning'"
@@ -631,13 +632,13 @@ function selectInstance(instanceId: string) {
                       <span class="font-medium text-sm truncate">{{ inst.name }}</span>
                       <div v-if="inst.slug" class="group/slug relative max-w-[50%] flex items-center">
                         <span class="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground truncate block">{{ inst.slug }}</span>
-                        <button
+                        <Button variant="unstyled" size="unstyled"
                           class="ml-0.5 p-0.5 rounded opacity-0 group-hover/slug:opacity-100 transition-opacity text-muted-foreground hover:text-foreground shrink-0"
                           @click.stop="copySlug(inst.slug)"
                         >
                           <Check v-if="copiedSlug === inst.slug" class="w-3 h-3 text-emerald-500" />
                           <Copy v-else class="w-3 h-3" />
-                        </button>
+                        </Button>
                         <div class="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 px-2 py-1 rounded bg-popover border border-border text-xs text-popover-foreground shadow-md whitespace-nowrap opacity-0 group-hover/slug:opacity-100 transition-opacity pointer-events-none z-10">
                           {{ inst.slug }}
                         </div>
@@ -652,7 +653,7 @@ function selectInstance(instanceId: string) {
                     >
                       {{ getStatusLabel(inst.status) }}
                     </span>
-                  </button>
+                  </Button>
                 </div>
               </div>
               <!-- 已学习 -->
@@ -670,24 +671,24 @@ function selectInstance(instanceId: string) {
                     <div class="flex items-center gap-2 min-w-0 flex-1">
                       <div class="flex items-center gap-1 min-w-0">
                         <span class="font-medium text-sm truncate">{{ inst.name }}</span>
-                        <button
+                        <Button variant="unstyled" size="unstyled"
                           class="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0"
                           :title="t('gene.viewInstanceGenes')"
                           :aria-label="t('gene.viewInstanceGenes')"
                           @click.stop="goToInstanceGenes(inst.id)"
                         >
                           <ExternalLink class="w-3.5 h-3.5" />
-                        </button>
+                        </Button>
                       </div>
                       <div v-if="inst.slug" class="group/slug relative max-w-[50%] flex items-center">
                         <span class="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground truncate block">{{ inst.slug }}</span>
-                        <button
+                        <Button variant="unstyled" size="unstyled"
                           class="ml-0.5 p-0.5 rounded opacity-0 group-hover/slug:opacity-100 transition-opacity text-muted-foreground hover:text-foreground shrink-0"
                           @click.stop="copySlug(inst.slug)"
                         >
                           <Check v-if="copiedSlug === inst.slug" class="w-3 h-3 text-emerald-500" />
                           <Copy v-else class="w-3 h-3" />
-                        </button>
+                        </Button>
                         <div class="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 px-2 py-1 rounded bg-popover border border-border text-xs text-popover-foreground shadow-md whitespace-nowrap opacity-0 group-hover/slug:opacity-100 transition-opacity pointer-events-none z-10">
                           {{ inst.slug }}
                         </div>

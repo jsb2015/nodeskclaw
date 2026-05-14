@@ -21,6 +21,8 @@ import { SlashCommand } from './extensions/slashCommand'
 import { computeMentionCandidates } from '@/utils/topologyBfs'
 import { formatTime as formatLocaleTime } from '@/utils/localeFormat'
 import { filterMessagesForConversation } from '@/utils/workspaceConversations'
+import { Button } from '@/components/ui/button'
+import { FileInput, Input } from '@/components/ui/input'
 
 const props = withDefaults(defineProps<{
   workspaceId: string
@@ -904,24 +906,24 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
     <div class="px-4 py-2 border-b border-border shrink-0 space-y-2">
       <div class="relative">
         <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-        <input
+        <Input
           v-model="chatSearch"
           class="w-full rounded-lg border border-border bg-muted pl-9 pr-9 py-2 text-sm outline-none focus:ring-1 focus:ring-primary/50"
           :placeholder="t('chat.searchPlaceholder')"
         />
-        <button
+        <Button variant="unstyled" size="unstyled"
           v-if="searchActive"
           class="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
           :title="t('chat.clearSearch')"
           @click="clearSearchFilters"
         >
           <X class="w-3.5 h-3.5" />
-        </button>
+        </Button>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
         <label class="flex flex-col gap-1 text-xs text-muted-foreground">
           <span>{{ t('chat.searchFrom') }}</span>
-          <input
+          <Input
             v-model="searchFrom"
             type="datetime-local"
             class="w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-primary/50"
@@ -930,7 +932,7 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
         </label>
         <label class="flex flex-col gap-1 text-xs text-muted-foreground">
           <span>{{ t('chat.searchTo') }}</span>
-          <input
+          <Input
             v-model="searchTo"
             type="datetime-local"
             class="w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-primary/50"
@@ -1057,14 +1059,14 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
               <div class="flex items-center gap-1.5 text-orange-700 dark:text-orange-300">
                 <AlertTriangle class="w-3.5 h-3.5 shrink-0" />
                 <span>{{ agentErrorText(msg.error.code) }}</span>
-                <button
+                <Button variant="unstyled" size="unstyled"
                   v-if="msg.error.detail && !isHelpfulDetail(msg.error.detail)"
                   class="ml-1 flex items-center gap-0.5 text-xs text-orange-500 hover:text-orange-700 dark:hover:text-orange-200 transition-colors"
                   @click="toggleErrorDetail(msg.id)"
                 >
                   <component :is="expandedErrors.has(msg.id) ? ChevronDown : ChevronRight" class="w-3 h-3" />
                   {{ expandedErrors.has(msg.id) ? t('errors.agent.hide_detail') : t('errors.agent.view_detail') }}
-                </button>
+                </Button>
               </div>
               <div
                 v-if="isHelpfulDetail(msg.error.detail)"
@@ -1079,13 +1081,13 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
                 {{ msg.error.detail }}
               </div>
               <div v-if="msg.error.raw" class="mt-1.5">
-                <button
+                <Button variant="unstyled" size="unstyled"
                   class="flex items-center gap-0.5 text-xs text-orange-500 hover:text-orange-700 dark:hover:text-orange-200 transition-colors"
                   @click="toggleRawError(msg.id)"
                 >
                   <component :is="expandedRawErrors.has(msg.id) ? ChevronDown : ChevronRight" class="w-3 h-3" />
                   {{ t('errors.agent.raw_error') }}
-                </button>
+                </Button>
                 <pre
                   v-if="expandedRawErrors.has(msg.id)"
                   class="mt-1 max-h-[200px] overflow-y-auto rounded bg-orange-100/50 dark:bg-orange-900/20 px-2 py-1.5 text-xs font-mono text-orange-800 dark:text-orange-200 whitespace-pre-wrap break-all"
@@ -1096,20 +1098,20 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
               v-if="msg.sender_type === 'agent' && !msg.streaming && msg.content && !msg.error"
               class="flex items-center gap-1 mt-1"
             >
-              <button
+              <Button variant="unstyled" size="unstyled"
                 class="p-1 rounded hover:bg-muted/80 transition-colors"
                 :class="feedbackGiven[msg.id] === 'up' ? 'text-green-500' : 'text-muted-foreground/50 hover:text-green-500'"
                 @click="handleFeedback(msg, 'up')"
               >
                 <ThumbsUp class="w-3 h-3" />
-              </button>
-              <button
+              </Button>
+              <Button variant="unstyled" size="unstyled"
                 class="p-1 rounded hover:bg-muted/80 transition-colors"
                 :class="feedbackGiven[msg.id] === 'down' ? 'text-red-500' : 'text-muted-foreground/50 hover:text-red-500'"
                 @click="handleFeedback(msg, 'down')"
               >
                 <ThumbsDown class="w-3 h-3" />
-              </button>
+              </Button>
             </div>
             <div
               v-else-if="msg.sender_type !== 'agent'"
@@ -1152,7 +1154,7 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
             {{ t('chat.mentionTitle') }}
           </div>
           <div ref="mentionSuggestionListRef" class="max-h-40 overflow-y-auto">
-            <button
+            <Button variant="unstyled" size="unstyled"
               v-for="(item, idx) in mentionState.items"
               :key="item.id"
               :data-suggestion-index="idx"
@@ -1168,7 +1170,7 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
                 <span v-if="item.sublabel" class="text-[10px] text-muted-foreground truncate">{{ item.sublabel }}</span>
               </div>
               <span class="text-xs text-muted-foreground ml-auto shrink-0">{{ item.slug || item.status }}</span>
-            </button>
+            </Button>
           </div>
         </div>
       </Transition>
@@ -1183,7 +1185,7 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
             Commands
           </div>
           <div ref="commandSuggestionListRef" class="max-h-40 overflow-y-auto">
-            <button
+            <Button variant="unstyled" size="unstyled"
               v-for="(item, idx) in commandState.items"
               :key="item.id"
               :data-suggestion-index="idx"
@@ -1201,7 +1203,7 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
                   ? 'bg-green-500/15 text-green-600 dark:text-green-400'
                   : 'bg-primary/10 text-primary'"
               >{{ item.immediate ? t('chat.immediate') : 'Tag' }}</span>
-            </button>
+            </Button>
           </div>
         </div>
       </Transition>
@@ -1223,12 +1225,12 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
             <FileText class="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
             <span class="truncate">{{ file.name }}</span>
             <span class="text-muted-foreground shrink-0">({{ formatFileSize(file.size) }})</span>
-            <button
+            <Button variant="unstyled" size="unstyled"
               class="absolute -top-1.5 -right-1.5 p-0.5 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity"
               @click.stop="removePendingFile(idx)"
             >
               <X class="w-2.5 h-2.5" />
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -1243,15 +1245,14 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
 
         <div class="flex items-center justify-between px-2 pb-1.5">
           <div class="flex items-center gap-0.5">
-            <input
+            <FileInput
               ref="fileInputRef"
-              type="file"
               multiple
               class="hidden"
               @change="handleFileSelect"
             />
             <BaseTooltip :text="!store.fileUploadEnabled ? t('chat.fileUploadDisabled') : ''">
-              <button
+              <Button variant="unstyled" size="unstyled"
                 class="p-1.5 rounded-md transition-colors"
                 :class="store.fileUploadEnabled
                   ? 'text-muted-foreground hover:text-foreground hover:bg-accent'
@@ -1260,31 +1261,31 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
                 @click="triggerFileInput"
               >
                 <Paperclip class="w-3.5 h-3.5" />
-              </button>
+              </Button>
             </BaseTooltip>
-            <button
+            <Button variant="unstyled" size="unstyled"
               class="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
               :title="t('chat.mentionAgent')"
               @click="triggerMention"
             >
               <AtSign class="w-3.5 h-3.5" />
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled" size="unstyled"
               class="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
               :title="t('chat.slashCommand')"
               @click="triggerSlash"
             >
               <Slash class="w-3.5 h-3.5" />
-            </button>
+            </Button>
           </div>
-          <button
+          <Button variant="unstyled" size="unstyled"
             class="p-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-40"
             :disabled="(editorEmpty && pendingFiles.length === 0) || sending || fileUploading"
             @click="sendMessage"
           >
             <Loader2 v-if="sending || fileUploading" class="w-3.5 h-3.5 animate-spin" />
             <Send v-else class="w-3.5 h-3.5" />
-          </button>
+          </Button>
         </div>
       </div>
     </div>

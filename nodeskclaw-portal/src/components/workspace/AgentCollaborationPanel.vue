@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { X, GitBranch, ArrowRight } from 'lucide-vue-next'
 import api from '@/services/api'
 import { formatTime as formatLocaleTime } from '@/utils/localeFormat'
+import { Button } from '@/components/ui/button'
 
 const { t, locale } = useI18n()
 
@@ -88,9 +89,9 @@ defineExpose({ addLiveMessage })
         <span class="text-sm font-medium">{{ agentName }}</span>
         <span class="text-xs text-muted-foreground">{{ t('hexAction.viewCollaboration') }}</span>
       </div>
-      <button class="p-1 rounded hover:bg-muted transition-colors" @click="emit('close')">
+      <Button variant="unstyled" size="unstyled" class="p-1 rounded hover:bg-muted transition-colors" @click="emit('close')">
         <X class="w-4 h-4 text-muted-foreground" />
-      </button>
+      </Button>
     </div>
 
     <div class="flex-1 overflow-y-auto p-3 space-y-2">

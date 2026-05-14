@@ -33,6 +33,8 @@ import { useGeneStore } from '@/stores/gene'
 import type { GeneItem, GenomeItem, TemplateInfo } from '@/stores/gene'
 import { useToast } from '@/composables/useToast'
 import CustomSelect from '@/components/shared/CustomSelect.vue'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 const router = useRouter()
 const store = useGeneStore()
@@ -296,7 +298,7 @@ function hasNativeTools(gene: GeneItem): boolean {
         <h1 class="text-2xl font-bold mb-4">{{ t('geneMarket.title') }}</h1>
 
         <div class="flex flex-wrap items-center gap-2">
-          <button
+          <Button variant="unstyled" size="unstyled"
             :class="[
               'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
               viewMode === 'genes'
@@ -306,8 +308,8 @@ function hasNativeTools(gene: GeneItem): boolean {
             @click="viewMode = 'genes'"
           >
             {{ t('geneMarket.tabGenes') }}
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled" size="unstyled"
             :class="[
               'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
               viewMode === 'genomes'
@@ -317,8 +319,8 @@ function hasNativeTools(gene: GeneItem): boolean {
             @click="viewMode = 'genomes'"
           >
             {{ t('geneMarket.tabGenomes') }}
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled" size="unstyled"
             :class="[
               'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
               viewMode === 'templates'
@@ -328,8 +330,8 @@ function hasNativeTools(gene: GeneItem): boolean {
             @click="viewMode = 'templates'"
           >
             {{ t('geneMarket.tabTemplates') }}
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled" size="unstyled"
             :class="[
               'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
               viewMode === 'evolution'
@@ -339,7 +341,7 @@ function hasNativeTools(gene: GeneItem): boolean {
             @click="viewMode = 'evolution'"
           >
             {{ t('geneMarket.tabEvolution') }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -479,7 +481,7 @@ function hasNativeTools(gene: GeneItem): boolean {
                   <div class="text-sm text-muted-foreground">{{ g.slug }} · {{ g.review_status }}</div>
                 </div>
                 <div class="flex items-center gap-2 shrink-0">
-                  <button
+                  <Button variant="unstyled" size="unstyled"
                     class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm bg-green-500/10 text-green-600 hover:bg-green-500/20 disabled:opacity-50"
                     :disabled="evoReviewingId === g.id"
                     @click="handleReview(g.id, 'approve')"
@@ -487,15 +489,15 @@ function hasNativeTools(gene: GeneItem): boolean {
                     <Loader2 v-if="evoReviewingId === g.id" class="w-4 h-4 animate-spin" />
                     <Check v-else class="w-4 h-4" />
                     {{ t('geneMarket.approve') }}
-                  </button>
-                  <button
+                  </Button>
+                  <Button variant="unstyled" size="unstyled"
                     class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm bg-red-500/10 text-red-600 hover:bg-red-500/20 disabled:opacity-50"
                     :disabled="evoReviewingId === g.id"
                     @click="handleReview(g.id, 'reject')"
                   >
                     <X class="w-4 h-4" />
                     {{ t('geneMarket.reject') }}
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -508,7 +510,7 @@ function hasNativeTools(gene: GeneItem): boolean {
 
       <!-- Visibility filter -->
       <div v-if="viewMode === 'genes' || viewMode === 'templates'" class="flex gap-2 mb-4">
-        <button
+        <Button variant="unstyled" size="unstyled"
           v-for="vis in [
             { value: null, key: 'geneMarket.visAll' },
             { value: 'public', key: 'geneMarket.visPublic' },
@@ -524,13 +526,13 @@ function hasNativeTools(gene: GeneItem): boolean {
           @click="selectedVisibility = vis.value"
         >
           {{ t(vis.key) }}
-        </button>
+        </Button>
       </div>
 
       <div class="flex flex-wrap gap-3 mb-6">
         <div class="relative flex-1 min-w-[200px]">
           <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
+          <Input
             v-model="keyword"
             type="text"
             :placeholder="t('geneMarket.searchPlaceholder')"
@@ -539,7 +541,7 @@ function hasNativeTools(gene: GeneItem): boolean {
         </div>
 
         <div v-if="viewMode === 'genes'" class="flex flex-wrap gap-2">
-          <button
+          <Button variant="unstyled" size="unstyled"
             v-for="t in store.tagStats"
             :key="t.tag"
             :class="[
@@ -551,7 +553,7 @@ function hasNativeTools(gene: GeneItem): boolean {
             @click="selectedTag = selectedTag === t.tag ? null : t.tag"
           >
             {{ localizeGeneMeta(t.tag) }}
-          </button>
+          </Button>
         </div>
 
         <CustomSelect
@@ -789,7 +791,7 @@ function hasNativeTools(gene: GeneItem): boolean {
           v-if="totalPages > 1"
           class="flex items-center justify-center gap-2 mt-8"
         >
-          <button
+          <Button variant="unstyled" size="unstyled"
             :disabled="!canPrev"
             :class="[
               'px-3 py-1.5 rounded-lg text-sm transition-colors',
@@ -800,11 +802,11 @@ function hasNativeTools(gene: GeneItem): boolean {
             @click="page = Math.max(1, page - 1)"
           >
             {{ t('geneMarket.prevPage') }}
-          </button>
+          </Button>
           <span class="text-sm text-muted-foreground">
             {{ page }} / {{ totalPages }}
           </span>
-          <button
+          <Button variant="unstyled" size="unstyled"
             :disabled="!canNext"
             :class="[
               'px-3 py-1.5 rounded-lg text-sm transition-colors',
@@ -815,7 +817,7 @@ function hasNativeTools(gene: GeneItem): boolean {
             @click="page = Math.min(totalPages, page + 1)"
           >
             {{ t('geneMarket.nextPage') }}
-          </button>
+          </Button>
         </div>
       </template>
       </template>

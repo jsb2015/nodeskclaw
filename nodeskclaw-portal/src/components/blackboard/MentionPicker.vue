@@ -3,6 +3,7 @@ import { ref, computed, watch, nextTick } from 'vue'
 import { Bot, User } from 'lucide-vue-next'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { computeMentionCandidates } from '@/utils/topologyBfs'
+import { Button } from '@/components/ui/button'
 
 const props = defineProps<{
   modelValue: string
@@ -136,7 +137,7 @@ defineExpose({ onInput, onKeydown })
 
 <template>
   <div v-if="showPicker && filtered.length > 0" class="absolute z-20 bottom-full mb-1 left-0 w-64 max-h-48 overflow-y-auto bg-popover border border-border rounded-lg shadow-lg">
-    <button
+    <Button variant="unstyled" size="unstyled"
       v-for="(c, idx) in filtered"
       :key="`${c.type}-${c.id}`"
       class="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left transition-colors"
@@ -147,6 +148,6 @@ defineExpose({ onInput, onKeydown })
       <User v-else class="w-3.5 h-3.5 text-muted-foreground shrink-0" />
       <span class="truncate">{{ c.name }}</span>
       <span class="ml-auto text-xs text-muted-foreground shrink-0">{{ c.type === 'agent' ? 'AI' : '' }}</span>
-    </button>
+    </Button>
   </div>
 </template>

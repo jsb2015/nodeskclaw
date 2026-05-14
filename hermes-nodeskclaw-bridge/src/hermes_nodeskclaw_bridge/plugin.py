@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import os
@@ -341,29 +342,31 @@ def shared_files_tool(args: dict[str, Any], **kwargs: Any) -> str:
         content = str(args.get("content") or "")
         parent_path = str(args.get("parent_path") or "/")
         content_type = str(args.get("content_type") or "text/plain")
-        return _json_result(
-            _bb_api_fetch(
-                cfg,
-                f"/workspaces/{ws}/blackboard/files/upload",
-                method="POST",
-                body={
-                    "filename": filename,
-                    "content": content,
-                    "parent_path": parent_path,
-                    "content_type": content_type,
-                },
-            )
+        result = _bb_api_fetch(
+            cfg,
+            f"/workspaces/{ws}/blackboard/files/upload",
+            method="POST",
+            body={
+                "filename": filename,
+                "content": base64.b64encode(content.encode("utf-8")).decode("ascii"),
+                "parent_path": parent_path,
+                "content_type": content_type,
+            },
         )
+        return _json_result(_normalize_file_upload_result(result))
     if action == "mkdir":
         path = str(args.get("path") or "")
         if not path:
             return _json_result({"error": "'path' is required for mkdir."})
+        mkdir_body = _mkdir_body_from_path(path)
+        if "error" in mkdir_body:
+            return _json_result(mkdir_body)
         return _json_result(
             _bb_api_fetch(
                 cfg,
                 f"/workspaces/{ws}/blackboard/files/mkdir",
                 method="POST",
-                body={"path": path},
+                body=mkdir_body,
             )
         )
     if action == "read":
@@ -659,6 +662,45 @@ def _bb_api_fetch(
                     "Use nodeskclaw_topology get_my_neighbors to check your reachable nodes."
                 ),
             }
+    return result
+
+
+def _mkdir_body_from_path(path: str) -> dict[str, str]:
+    normalized = path.strip()
+    if not normalized:
+        return {"error": "'path' is required for mkdir."}
+    if not normalized.startswith("/"):
+        normalized = "/" + normalized
+    normalized = normalized.rstrip("/")
+    if not normalized or normalized == "/":
+        return {"error": "'path' must include a directory name for mkdir."}
+    if ".." in normalized.split("/"):
+        return {"error": "'path' must not contain '..'."}
+
+    parent_path, name = normalized.rsplit("/", 1)
+    if not name:
+        return {"error": "'path' must include a directory name for mkdir."}
+    parent_path = "/" if parent_path in {"", "/"} else f"{parent_path}/"
+    return {"parent_path": parent_path, "name": name}
+
+
+def _normalize_file_upload_result(result: Any) -> Any:
+    if not isinstance(result, dict):
+        return result
+    data = result.get("data")
+    if not isinstance(data, dict):
+        return result
+
+    file_id = data.get("id") or data.get("file_id")
+    if file_id and "file_id" not in data:
+        data = dict(data)
+        data["file_id"] = file_id
+    if data.get("name") and "filename" not in data:
+        data = dict(data)
+        data["filename"] = data["name"]
+    if data is not result.get("data"):
+        result = dict(result)
+        result["data"] = data
     return result
 
 

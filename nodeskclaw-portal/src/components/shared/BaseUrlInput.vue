@@ -9,6 +9,8 @@ export function stripProtocol(url: string): string {
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { ChevronDown, X } from 'lucide-vue-next'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 const props = withDefaults(
   defineProps<{
@@ -102,7 +104,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onDocumentMousedown,
 
 <template>
   <div class="flex relative" ref="containerRef">
-    <button
+    <Button variant="unstyled" size="unstyled"
       type="button"
       class="flex items-center gap-0.5 px-2 py-1.5 border border-r-0 border-border bg-muted/50 rounded-l-md text-xs font-mono text-muted-foreground hover:text-foreground transition-colors shrink-0"
       @click="dropdownOpen = !dropdownOpen"
@@ -112,13 +114,13 @@ onUnmounted(() => document.removeEventListener('mousedown', onDocumentMousedown,
         class="w-3 h-3 transition-transform"
         :class="dropdownOpen ? 'rotate-180' : ''"
       />
-    </button>
+    </Button>
 
     <div
       v-if="dropdownOpen"
       class="absolute left-0 top-full z-50 mt-1 rounded-md border border-border bg-card shadow-lg overflow-hidden"
     >
-      <button
+      <Button variant="unstyled" size="unstyled"
         v-for="p in (['https://', 'http://'] as Protocol[])"
         :key="p"
         type="button"
@@ -127,10 +129,10 @@ onUnmounted(() => document.removeEventListener('mousedown', onDocumentMousedown,
         @click="selectProtocol(p)"
       >
         {{ p }}
-      </button>
+      </Button>
     </div>
 
-    <input
+    <Input
       :value="host"
       type="text"
       :placeholder="placeholder"
@@ -140,13 +142,13 @@ onUnmounted(() => document.removeEventListener('mousedown', onDocumentMousedown,
       @paste="onPaste"
     />
 
-    <button
+    <Button variant="unstyled" size="unstyled"
       v-if="showClear"
       type="button"
       class="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
       @click="onClear"
     >
       <X class="w-3.5 h-3.5" />
-    </button>
+    </Button>
   </div>
 </template>

@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n'
 import { useWorkspaceStore, type WorkspaceListItem } from '@/stores/workspace'
 import WorkspaceCard from '@/components/workspace/WorkspaceCard.vue'
 import DeployFromTemplateDialog from '@/components/workspace/DeployFromTemplateDialog.vue'
+import { Button } from '@/components/ui/button'
 
 const router = useRouter()
 const store = useWorkspaceStore()
@@ -76,13 +77,13 @@ function createNew() {
         <h1 class="text-2xl font-bold">{{ t('workspaceList.title') }}</h1>
         <p class="text-sm text-muted-foreground mt-1">{{ t('workspaceList.subtitle') }}</p>
       </div>
-      <button
+      <Button variant="unstyled" size="unstyled"
         class="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
         @click="createNew"
       >
         <Plus class="w-4 h-4" />
         {{ t('workspaceList.createNew') }}
-      </button>
+      </Button>
     </div>
 
     <!-- Loading -->
@@ -102,12 +103,12 @@ function createNew() {
       <p class="text-sm text-muted-foreground max-w-sm mx-auto">
         {{ t('workspaceList.emptyDescription') }}
       </p>
-      <button
+      <Button variant="unstyled" size="unstyled"
         class="mt-4 px-6 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
         @click="createNew"
       >
         {{ t('workspaceList.createFirst') }}
-      </button>
+      </Button>
     </div>
 
     <!-- Grid -->

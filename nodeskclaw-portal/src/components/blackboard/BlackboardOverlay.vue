@@ -14,6 +14,8 @@ import TokenUsagePanel from './TokenUsagePanel.vue'
 import PostList from './PostList.vue'
 import PostDetail from './PostDetail.vue'
 import SharedFileBrowser from './SharedFileBrowser.vue'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 
 const props = withDefaults(defineProps<{
   open: boolean
@@ -113,30 +115,30 @@ const canEditTab = computed(() => activeTab.value === 'notes-perf')
         <div class="flex items-center justify-between px-5 py-3 border-b border-border shrink-0">
           <h2 :class="embedded ? 'text-sm font-semibold' : 'text-lg font-semibold'">{{ t('hexAction.centralBlackboard') }}</h2>
           <div class="flex items-center gap-1">
-            <button
+            <Button variant="unstyled" size="unstyled"
               v-if="canEditTab && !editing"
               class="p-1.5 rounded hover:bg-muted transition-colors"
               :title="t('blackboard.edit')"
               @click="enterEdit"
             >
               <Pencil class="w-4 h-4" />
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled" size="unstyled"
               v-if="editing"
               class="p-1.5 rounded hover:bg-muted transition-colors"
               :title="t('blackboard.preview')"
               @click="editing = false"
             >
               <Eye class="w-4 h-4" />
-            </button>
-            <button v-if="!embedded" class="p-1.5 rounded hover:bg-muted transition-colors" @click="emit('close')">
+            </Button>
+            <Button variant="unstyled" size="unstyled" v-if="!embedded" class="p-1.5 rounded hover:bg-muted transition-colors" @click="emit('close')">
               <X class="w-5 h-5" />
-            </button>
+            </Button>
           </div>
         </div>
 
         <div class="flex border-b border-border px-2 shrink-0">
-          <button
+          <Button variant="unstyled" size="unstyled"
             v-for="tab in tabs"
             :key="tab.key"
             class="flex items-center gap-1.5 px-3 py-2 text-sm transition-colors border-b-2"
@@ -152,7 +154,7 @@ const canEditTab = computed(() => activeTab.value === 'notes-perf')
             >
               {{ store.unreadPostCount > 99 ? '99+' : store.unreadPostCount }}
             </span>
-          </button>
+          </Button>
         </div>
 
         <div class="flex-1 min-h-0 overflow-y-auto px-5 py-4">
@@ -211,7 +213,7 @@ const canEditTab = computed(() => activeTab.value === 'notes-perf')
 
           <template v-if="activeTab === 'notes-perf'">
             <div v-if="editing">
-              <textarea
+              <Textarea
                 v-model="draft"
                 rows="18"
                 class="w-full bg-muted rounded-lg p-4 text-sm font-mono resize-none outline-none focus:ring-1 focus:ring-primary/50 min-h-[300px]"
@@ -242,13 +244,13 @@ const canEditTab = computed(() => activeTab.value === 'notes-perf')
         </div>
 
         <div v-if="editing" class="flex justify-end gap-2 px-5 py-3 border-t border-border shrink-0">
-          <button
+          <Button variant="unstyled" size="unstyled"
             class="px-4 py-2 text-sm rounded-lg bg-muted hover:bg-muted/80 transition-colors"
             @click="editing = false"
           >
             {{ t('blackboard.cancel') }}
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled" size="unstyled"
             class="px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors flex items-center gap-2 disabled:opacity-50"
             :disabled="saving"
             @click="save"
@@ -256,7 +258,7 @@ const canEditTab = computed(() => activeTab.value === 'notes-perf')
             <Loader2 v-if="saving" class="w-4 h-4 animate-spin" />
             <Save v-else class="w-4 h-4" />
             {{ t('blackboard.save') }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

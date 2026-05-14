@@ -40,6 +40,20 @@ LEGACY_REGISTRY_CONFIGS: dict[str, tuple[str, ...]] = {
     ),
 }
 
+DEFAULT_ENGINE_VERSION_SEEDS: tuple[dict[str, str | bool | None], ...] = (
+    {
+        "runtime": "hermes",
+        "version": "2026.4.23-20260514",
+        "image_tag": "v2026.4.23-20260514",
+        "status": "published",
+        "is_default": True,
+        "release_notes": (
+            "Hermes 官方 v2026.4.23 基线，NoDeskClaw 于 2026-05-14 打包；"
+            "构建 constraints 显式排除 mistralai==2.4.6。"
+        ),
+    },
+)
+
 
 async def _seed_default_registry_configs(
     session_factory: async_sessionmaker[AsyncSession],
@@ -476,7 +490,7 @@ async def _ensure_workspace_schedules(session_factory: async_sessionmaker[AsyncS
 async def seed_engine_versions(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Populate EngineVersion from existing Instance records on first run.
+    """Populate EngineVersion from built-ins and existing Instance records on first run.
 
     Only runs when the table is empty — does not overwrite admin choices.
     """
@@ -492,6 +506,8 @@ async def seed_engine_versions(
         if count > 0:
             return
 
+        seeded = 0
+        imported = 0
         rows = (await db.execute(
             select(Instance.runtime, Instance.image_version)
             .where(
@@ -501,9 +517,6 @@ async def seed_engine_versions(
             )
             .distinct()
         )).all()
-
-        if not rows:
-            return
 
         def _version_key(v: str) -> tuple[int, ...]:
             try:
@@ -527,10 +540,28 @@ async def seed_engine_versions(
                     status="published",
                     is_default=(idx == 0),
                 ))
+                imported += 1
 
-        await db.commit()
-        total = sum(len(v) for v in by_runtime.values())
-        logger.info("种子数据：从现有实例导入 %d 个引擎版本到版本目录", total)
+        for seed in DEFAULT_ENGINE_VERSION_SEEDS:
+            runtime = str(seed["runtime"])
+            runtime_count = (await db.execute(
+                select(func.count()).select_from(EngineVersion).where(
+                    EngineVersion.runtime == runtime,
+                    EngineVersion.deleted_at.is_(None),
+                )
+            )).scalar_one()
+            if runtime_count > 0:
+                continue
+            db.add(EngineVersion(**seed))
+            seeded += 1
+
+        if imported or seeded:
+            await db.commit()
+            logger.info(
+                "种子数据：导入 %d 个已有实例引擎版本，内置 %d 个默认引擎版本",
+                imported,
+                seeded,
+            )
 
 
 async def backfill_cluster_org_id(

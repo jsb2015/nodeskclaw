@@ -5,6 +5,9 @@ import { useI18n } from 'vue-i18n'
 import api from '@/services/api'
 import MentionPicker from './MentionPicker.vue'
 import { formatDate, formatTime as formatLocaleTime } from '@/utils/localeFormat'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
 
 const props = defineProps<{ workspaceId: string }>()
 const emit = defineEmits<{ (e: 'select', postId: string): void }>()
@@ -83,23 +86,23 @@ watch(() => props.workspaceId, fetchPosts)
   <div class="space-y-3">
     <div class="flex items-center justify-between">
       <h3 class="text-sm font-medium text-muted-foreground">{{ t('blackboard.posts') }}</h3>
-      <button
+      <Button variant="unstyled" size="unstyled"
         class="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
         @click="showCreate = !showCreate"
       >
         <Plus class="w-3.5 h-3.5" />
         {{ t('blackboard.newPost') }}
-      </button>
+      </Button>
     </div>
 
     <div v-if="showCreate" class="border border-border rounded-lg p-3 space-y-2 bg-muted/30">
-      <input
+      <Input
         v-model="newTitle"
         class="w-full bg-background border border-border rounded px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-primary/50"
         :placeholder="t('blackboard.postTitlePlaceholder')"
       />
       <div class="relative">
-        <textarea
+        <Textarea
           ref="contentTextareaRef"
           v-model="newContent"
           rows="4"
@@ -115,20 +118,20 @@ watch(() => props.workspaceId, fetchPosts)
         />
       </div>
       <div class="flex justify-end gap-2">
-        <button
+        <Button variant="unstyled" size="unstyled"
           class="px-3 py-1.5 text-xs rounded-lg bg-muted hover:bg-muted/80 transition-colors"
           @click="showCreate = false"
         >
           {{ t('blackboard.cancel') }}
-        </button>
-        <button
+        </Button>
+        <Button variant="unstyled" size="unstyled"
           class="px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors flex items-center gap-1 disabled:opacity-50"
           :disabled="creating || !newTitle.trim() || !newContent.trim()"
           @click="createPost"
         >
           <Loader2 v-if="creating" class="w-3.5 h-3.5 animate-spin" />
           {{ t('blackboard.publish') }}
-        </button>
+        </Button>
       </div>
     </div>
 
@@ -141,7 +144,7 @@ watch(() => props.workspaceId, fetchPosts)
     </div>
 
     <div v-else class="space-y-1.5">
-      <button
+      <Button variant="unstyled" size="unstyled"
         v-for="post in posts"
         :key="post.id"
         class="w-full text-left px-3 py-2.5 rounded-lg bg-muted/40 hover:bg-muted/70 transition-colors"
@@ -159,25 +162,25 @@ watch(() => props.workspaceId, fetchPosts)
           <span>{{ post.author_name }}</span>
           <span>{{ formatTime(post.last_reply_at || post.created_at) }}</span>
         </div>
-      </button>
+      </Button>
     </div>
 
     <div v-if="totalPages > 1" class="flex items-center justify-center gap-2 pt-2">
-      <button
+      <Button variant="unstyled" size="unstyled"
         class="p-1 rounded hover:bg-muted transition-colors disabled:opacity-30"
         :disabled="page <= 1"
         @click="page--; fetchPosts()"
       >
         <ChevronLeft class="w-4 h-4" />
-      </button>
+      </Button>
       <span class="text-xs text-muted-foreground">{{ page }} / {{ totalPages }}</span>
-      <button
+      <Button variant="unstyled" size="unstyled"
         class="p-1 rounded hover:bg-muted transition-colors disabled:opacity-30"
         :disabled="page >= totalPages"
         @click="page++; fetchPosts()"
       >
         <ChevronRight class="w-4 h-4" />
-      </button>
+      </Button>
     </div>
   </div>
 </template>

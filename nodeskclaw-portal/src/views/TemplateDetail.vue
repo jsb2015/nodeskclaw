@@ -26,6 +26,7 @@ import {
 import { useGeneStore } from '@/stores/gene'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
+import { Button } from '@/components/ui/button'
 
 const route = useRoute()
 const router = useRouter()
@@ -91,13 +92,13 @@ async function handleDelete() {
   <div class="flex flex-col h-[calc(100vh-3.5rem)] bg-background text-foreground">
     <div class="shrink-0 border-b border-border">
       <div class="max-w-4xl mx-auto px-6 py-4">
-        <button
+        <Button variant="unstyled" size="unstyled"
           class="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
           @click="router.push('/gene-market')"
         >
           <ArrowLeft class="w-4 h-4" />
           {{ t('template.backToMarket') }}
-        </button>
+        </Button>
       </div>
     </div>
 
@@ -127,20 +128,20 @@ async function handleDelete() {
               </div>
             </div>
             <div class="flex items-center gap-2 shrink-0">
-              <button
+              <Button variant="unstyled" size="unstyled"
                 class="px-4 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
                 @click="useThisTemplate"
               >
                 {{ t('template.useTemplate') }}
-              </button>
-              <button
+              </Button>
+              <Button variant="unstyled" size="unstyled"
                 class="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                 :disabled="deleting"
                 @click="handleDelete"
               >
                 <Loader2 v-if="deleting" class="w-4 h-4 animate-spin" />
                 <Trash2 v-else class="w-4 h-4" />
-              </button>
+              </Button>
             </div>
           </div>
 

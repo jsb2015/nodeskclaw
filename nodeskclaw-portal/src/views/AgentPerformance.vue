@@ -4,6 +4,7 @@ import { BarChart3, RefreshCw, Loader2, ChevronDown, ChevronUp, Clock, Coins, Tr
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useI18n } from 'vue-i18n'
 import { formatNumber as formatLocaleNumber } from '@/utils/localeFormat'
+import { Button } from '@/components/ui/button'
 
 interface WorkspaceBreakdown {
   workspace_id: string
@@ -114,7 +115,7 @@ onMounted(load)
       </h1>
       <div class="flex items-center gap-3">
         <div class="flex items-center gap-1 bg-muted/50 rounded-lg p-0.5">
-          <button
+          <Button variant="unstyled" size="unstyled"
             v-for="d in dayOptions"
             :key="d"
             :class="[
@@ -124,16 +125,16 @@ onMounted(load)
             @click="onDaysChange(d)"
           >
             {{ d }}{{ t('agentPerformance.daysUnit') }}
-          </button>
+          </Button>
         </div>
-        <button
+        <Button variant="unstyled" size="unstyled"
           class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
           :disabled="loading"
           @click="load"
         >
           <Loader2 v-if="loading" class="w-3.5 h-3.5 animate-spin" />
           <RefreshCw v-else class="w-3.5 h-3.5" />
-        </button>
+        </Button>
       </div>
     </div>
 
@@ -225,14 +226,14 @@ onMounted(load)
 
         <!-- Workspace breakdown toggle -->
         <div v-if="agent.workspaces.length > 0" class="border-t border-border/50">
-          <button
+          <Button variant="unstyled" size="unstyled"
             class="w-full px-5 py-2.5 flex items-center justify-between text-xs text-muted-foreground hover:text-foreground transition-colors"
             @click="toggleExpand(agent.instance_id)"
           >
             <span>{{ t('agentPerformance.workspaceBreakdown') }} ({{ agent.workspaces.length }})</span>
             <ChevronUp v-if="expandedAgents.has(agent.instance_id)" class="w-3.5 h-3.5" />
             <ChevronDown v-else class="w-3.5 h-3.5" />
-          </button>
+          </Button>
 
           <Transition
             enter-active-class="transition-all duration-200 ease-out"

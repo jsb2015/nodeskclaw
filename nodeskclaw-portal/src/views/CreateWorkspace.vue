@@ -10,6 +10,9 @@ import { resolveApiErrorMessage } from '@/i18n/error'
 import { useToast } from '@/composables/useToast'
 import TemplateCard from '@/components/workspace/TemplateCard.vue'
 import DeployFromTemplateDialog from '@/components/workspace/DeployFromTemplateDialog.vue'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -157,9 +160,9 @@ async function handleCreate() {
   <div class="max-w-2xl mx-auto px-6 py-8">
     <!-- Header -->
     <div class="flex items-center gap-3 mb-8">
-      <button class="p-1.5 rounded-lg hover:bg-muted transition-colors" @click="router.push('/')">
+      <Button variant="unstyled" size="unstyled" class="p-1.5 rounded-lg hover:bg-muted transition-colors" @click="router.push('/')">
         <ArrowLeft class="w-5 h-5" />
-      </button>
+      </Button>
       <h1 class="text-xl font-bold">{{ t('createWorkspace.title') }}</h1>
     </div>
 
@@ -185,13 +188,13 @@ async function handleCreate() {
 
     <!-- Step 2: Basic Info -->
     <div v-else class="space-y-6">
-      <button
+      <Button variant="unstyled" size="unstyled"
         class="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
         @click="goBackToTemplates"
       >
         <ChevronLeft class="w-4 h-4" />
         {{ t('createWorkspace.backToTemplates') }}
-      </button>
+      </Button>
 
       <div v-if="selectedTemplateName" class="text-sm text-muted-foreground">
         {{ t('createWorkspace.selectedTemplate') }}:
@@ -202,7 +205,7 @@ async function handleCreate() {
         <!-- Name -->
         <div class="space-y-2">
           <label class="text-sm font-medium">{{ t('createWorkspace.nameLabel') }}</label>
-          <input
+          <Input
             v-model="name"
             class="w-full px-3 py-2 rounded-lg bg-muted border border-border text-sm outline-none focus:ring-1 focus:ring-primary/50"
             :placeholder="t('createWorkspace.namePlaceholder')"
@@ -220,12 +223,12 @@ async function handleCreate() {
           <template v-if="availableClusters.length === 0">
             <div class="px-3 py-4 rounded-lg border border-dashed border-border bg-muted/50 text-center">
               <p class="text-sm text-muted-foreground">{{ t('createWorkspace.noCluster') }}</p>
-              <button
+              <Button variant="unstyled" size="unstyled"
                 class="mt-2 text-sm text-primary hover:underline"
                 @click="router.push('/settings/clusters')"
               >
                 {{ t('createWorkspace.goConfigCluster') }}
-              </button>
+              </Button>
             </div>
           </template>
 
@@ -240,7 +243,7 @@ async function handleCreate() {
 
           <template v-else>
             <div class="relative">
-              <button
+              <Button variant="unstyled" size="unstyled"
                 class="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-muted border border-border text-sm outline-none focus:ring-1 focus:ring-primary/50"
                 @click="clusterDropdownOpen = !clusterDropdownOpen"
               >
@@ -251,13 +254,13 @@ async function handleCreate() {
                   <span class="text-xs text-muted-foreground">({{ selectedCluster.compute_provider === 'docker' ? 'Docker' : 'K8s' }})</span>
                 </span>
                 <span v-else class="text-muted-foreground">{{ t('createWorkspace.clusterPlaceholder') }}</span>
-              </button>
+              </Button>
               <div v-if="clusterDropdownOpen" class="fixed inset-0 z-0" @click="clusterDropdownOpen = false" />
               <div
                 v-if="clusterDropdownOpen"
                 class="absolute z-10 mt-1 w-full rounded-lg border border-border bg-popover shadow-md"
               >
-                <button
+                <Button variant="unstyled" size="unstyled"
                   v-for="c in availableClusters"
                   :key="c.id"
                   class="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors first:rounded-t-lg last:rounded-b-lg"
@@ -267,7 +270,7 @@ async function handleCreate() {
                   <Server v-else class="w-4 h-4 text-primary shrink-0" />
                   <span>{{ c.name }}</span>
                   <span class="text-xs text-muted-foreground">({{ c.compute_provider === 'docker' ? 'Docker' : 'K8s' }})</span>
-                </button>
+                </Button>
               </div>
             </div>
           </template>
@@ -276,7 +279,7 @@ async function handleCreate() {
         <!-- Description -->
         <div class="space-y-2">
           <label class="text-sm font-medium">{{ t('createWorkspace.descriptionLabel') }}</label>
-          <textarea
+          <Textarea
             v-model="description"
             rows="3"
             class="w-full px-3 py-2 rounded-lg bg-muted border border-border text-sm outline-none focus:ring-1 focus:ring-primary/50 resize-none"
@@ -291,7 +294,7 @@ async function handleCreate() {
             {{ t('createWorkspace.themeColor') }}
           </label>
           <div class="flex gap-2">
-            <button
+            <Button variant="unstyled" size="unstyled"
               v-for="c in colors"
               :key="c"
               class="w-8 h-8 rounded-full border-2 transition-all"
@@ -322,7 +325,7 @@ async function handleCreate() {
         <p v-if="error" class="text-sm text-red-400">{{ error }}</p>
 
         <!-- Submit -->
-        <button
+        <Button variant="unstyled" size="unstyled"
           class="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
           :disabled="creating || !name.trim() || !selectedClusterId"
           @click="handleCreate"
@@ -330,7 +333,7 @@ async function handleCreate() {
           <Loader2 v-if="creating" class="w-4 h-4 animate-spin" />
           <Plus v-else class="w-4 h-4" />
           {{ t('createWorkspace.submit') }}
-        </button>
+        </Button>
       </div>
     </div>
 
@@ -346,9 +349,9 @@ async function handleCreate() {
           <div class="bg-card rounded-xl shadow-2xl w-full max-w-sm border border-border">
             <div class="flex items-center justify-between px-5 py-4 border-b border-border">
               <h3 class="text-sm font-semibold">{{ t('deleteTemplate.title') }}</h3>
-              <button type="button" class="p-1 rounded hover:bg-muted" @click="deleteDialogOpen = false">
+              <Button variant="unstyled" size="unstyled" type="button" class="p-1 rounded hover:bg-muted" @click="deleteDialogOpen = false">
                 <X class="w-4 h-4" />
-              </button>
+              </Button>
             </div>
             <div class="px-5 py-4 space-y-4">
               <p class="text-sm text-muted-foreground">
@@ -356,7 +359,7 @@ async function handleCreate() {
               </p>
               <div class="space-y-1.5">
                 <label class="text-xs text-muted-foreground">{{ t('deleteTemplate.inputLabel') }}</label>
-                <input
+                <Input
                   v-model="deleteConfirmInput"
                   class="w-full px-3 py-2 rounded-lg bg-muted border border-border text-sm outline-none focus:ring-1 focus:ring-destructive/50"
                   :placeholder="deleteTarget?.name"
@@ -364,14 +367,14 @@ async function handleCreate() {
               </div>
             </div>
             <div class="flex justify-end gap-2 px-5 py-3 border-t border-border">
-              <button
+              <Button variant="unstyled" size="unstyled"
                 type="button"
                 class="px-4 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
                 @click="deleteDialogOpen = false"
               >
                 {{ t('common.cancel') }}
-              </button>
-              <button
+              </Button>
+              <Button variant="unstyled" size="unstyled"
                 type="button"
                 class="px-4 py-2 text-sm rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors disabled:opacity-50"
                 :disabled="!deleteConfirmMatch || deleting"
@@ -379,7 +382,7 @@ async function handleCreate() {
               >
                 <Loader2 v-if="deleting" class="w-4 h-4 animate-spin inline mr-1" />
                 {{ t('deleteTemplate.confirmButton') }}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

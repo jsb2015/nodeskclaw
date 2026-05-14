@@ -36,6 +36,8 @@ const enUS = {
     yes: "Yes",
     no: "No",
     copyFailed: "Copy failed, please select and copy manually",
+    localeZhCN: "Simplified Chinese",
+    localeEnUS: "English",
   },
   status: {
     running: "Running",
@@ -178,6 +180,13 @@ const enUS = {
         efficiencyLabel: 'Productivity',
       },
     },
+  },
+  home: {
+    title: "My AI Employees",
+    subtitle: "Manage the DeskClaw AI employees you have deployed",
+    createInstance: "Create AI Employee",
+    emptyTitle: "No AI employees yet",
+    emptyDescription: "Create your first DeskClaw AI employee, then arrange its collaboration role inside a cyber office.",
   },
   orgSetup: {
     title: "Set up your organization",
@@ -869,6 +878,14 @@ const enUS = {
       empty: "No skills",
       loadFailed: "Failed to load skill content",
     },
+  },
+  runtimeDefaultCapabilities: {
+    sharedFiles: "Blackboard Files",
+    sharedFilesDesc: "Upload files to the office blackboard for other members to read",
+    blackboard: "Blackboard",
+    blackboardDesc: "Read and update tasks, objectives, and blackboard content",
+    topology: "Topology",
+    topologyDesc: "Read office members and reachable relationships",
   },
   instanceRuntime: {
     title: "Runtime Status",
@@ -1619,6 +1636,7 @@ const enUS = {
     restartFailed: "Failed to restart",
     delete: "Delete AI Employee",
     deleting: "Deleting...",
+    defaultCapabilities: "Default Capabilities",
     installedGenes: "Installed Skill Genes",
     appliedGenomes: "Applied Skill Genomes",
     viewAll: "View All",
@@ -1672,6 +1690,9 @@ const enUS = {
       forbidden: "Permission denied",
       bad_request: "Invalid request parameters",
       conflict: "Resource conflict",
+    },
+    file: {
+      invalid_base64: "File content format is invalid. Please upload the file again.",
     },
     system: {
       internal_error: "Internal server error",

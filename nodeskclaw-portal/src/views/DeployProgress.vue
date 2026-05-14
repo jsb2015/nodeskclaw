@@ -7,6 +7,7 @@ import {
   ExternalLink, ArrowLeft, ChevronDown, ChevronRight, Square,
 } from 'lucide-vue-next'
 import { fetchEventSource } from '@microsoft/fetch-event-source'
+import { Button } from '@/components/ui/button'
 import {
   buildDefaultBackendStepNames,
   buildPortalDeploySteps,
@@ -309,20 +310,20 @@ function lineColor(status: StepStatus) {
           <p class="text-sm text-muted-foreground mt-1">{{ t('deployProgress.successDesc', { name: instanceName }) }}</p>
         </div>
         <div class="flex justify-center gap-3">
-          <button
+          <Button variant="unstyled" size="unstyled"
             v-if="instanceId"
             class="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
             @click="router.push(`/instances/${instanceId}`)"
           >
             <ExternalLink class="w-4 h-4" />
             {{ t('deployProgress.viewInstance') }}
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled" size="unstyled"
             class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-border text-sm hover:bg-card transition-colors"
             @click="router.push('/instances')"
           >
             {{ t('deployProgress.instanceList') }}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -336,19 +337,19 @@ function lineColor(status: StepStatus) {
           </p>
         </div>
         <div class="flex justify-center gap-3">
-          <button
+          <Button variant="unstyled" size="unstyled"
             class="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
             @click="router.push('/instances/create')"
           >
             <ArrowLeft class="w-4 h-4" />
             {{ t('deployProgress.createAgain') }}
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled" size="unstyled"
             class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-border text-sm hover:bg-card transition-colors"
             @click="router.push('/instances')"
           >
             {{ t('deployProgress.instanceList') }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

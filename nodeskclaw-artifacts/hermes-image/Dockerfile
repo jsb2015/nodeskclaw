@@ -18,10 +18,11 @@ RUN if [ -n "$APT_MIRROR" ]; then \
     rm -rf /var/lib/apt/lists/*
 
 COPY hermes-nodeskclaw-bridge/ /tmp/hermes-nodeskclaw-bridge/
+COPY nodeskclaw-artifacts/hermes-image/python-constraints.txt /opt/hermes/python-constraints.txt
 
 RUN git clone --depth 1 --branch "${HERMES_VERSION}" https://github.com/NousResearch/hermes-agent.git /tmp/hermes-agent && \
-    pip install --no-cache-dir "/tmp/hermes-agent[homeassistant,cron,messaging,dingtalk,feishu]" && \
-    pip install --no-cache-dir /tmp/hermes-nodeskclaw-bridge && \
+    pip install --no-cache-dir --constraint /opt/hermes/python-constraints.txt "/tmp/hermes-agent[homeassistant,cron,messaging,dingtalk,feishu]" && \
+    pip install --no-cache-dir --constraint /opt/hermes/python-constraints.txt /tmp/hermes-nodeskclaw-bridge && \
     rm -rf /tmp/hermes-agent /tmp/hermes-nodeskclaw-bridge
 
 RUN mkdir -p /root/.hermes/{logs,skills,scripts,cron,sessions,memories}

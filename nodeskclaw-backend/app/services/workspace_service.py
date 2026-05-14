@@ -2,6 +2,7 @@
 
 import asyncio
 import base64
+import binascii
 import logging
 import re
 from collections.abc import Sequence
@@ -11,6 +12,7 @@ from typing import Coroutine, Literal
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import BadRequestError
 from app.models.blackboard import Blackboard
 from app.models.blackboard_file import BlackboardFile
 from app.models.blackboard_post import BlackboardPost
@@ -2066,7 +2068,13 @@ async def upload_shared_file(
     uploader_name: str,
     data: FileWriteRequest,
 ) -> FileInfo:
-    file_bytes = base64.b64decode(data.content)
+    try:
+        file_bytes = base64.b64decode(data.content, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise BadRequestError(
+            "文件内容不是有效的 Base64 编码",
+            message_key="errors.file.invalid_base64",
+        ) from exc
     return await upload_shared_file_bytes(
         db, workspace_id, uploader_type, uploader_id, uploader_name,
         filename=data.filename, file_bytes=file_bytes,

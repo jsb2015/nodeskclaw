@@ -6,6 +6,8 @@ import api from '@/services/api'
 import { renderMarkdown } from '@/utils/markdown'
 import MentionPicker from './MentionPicker.vue'
 import { formatDate, formatTime as formatLocaleTime } from '@/utils/localeFormat'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 
 const props = defineProps<{ workspaceId: string; postId: string }>()
 const emit = defineEmits<{ (e: 'back'): void }>()
@@ -96,11 +98,11 @@ watch(() => props.postId, fetchPost)
 <template>
   <div class="flex flex-col h-full">
     <div class="flex items-center gap-2 pb-3 border-b border-border shrink-0">
-      <button class="p-1 rounded hover:bg-muted transition-colors" @click="emit('back')">
+      <Button variant="unstyled" size="unstyled" class="p-1 rounded hover:bg-muted transition-colors" @click="emit('back')">
         <ArrowLeft class="w-4 h-4" />
-      </button>
+      </Button>
       <span v-if="post" class="text-sm font-medium truncate flex-1">{{ post.title }}</span>
-      <button
+      <Button variant="unstyled" size="unstyled"
         v-if="post"
         class="p-1 rounded hover:bg-muted transition-colors"
         :title="post.is_pinned ? t('blackboard.unpin') : t('blackboard.pin')"
@@ -108,7 +110,7 @@ watch(() => props.postId, fetchPost)
       >
         <PinOff v-if="post.is_pinned" class="w-4 h-4 text-primary" />
         <Pin v-else class="w-4 h-4" />
-      </button>
+      </Button>
     </div>
 
     <div v-if="loading" class="flex-1 flex items-center justify-center">
@@ -148,7 +150,7 @@ watch(() => props.postId, fetchPost)
     <div class="border-t border-border pt-3 shrink-0">
       <div class="flex items-end gap-2">
         <div class="relative flex-1">
-          <textarea
+          <Textarea
             ref="replyTextareaRef"
             v-model="replyContent"
             rows="2"
@@ -165,14 +167,14 @@ watch(() => props.postId, fetchPost)
             :textarea-el="replyTextareaRef"
           />
         </div>
-        <button
+        <Button variant="unstyled" size="unstyled"
           class="p-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 shrink-0"
           :disabled="replying || !replyContent.trim()"
           @click="sendReply"
         >
           <Loader2 v-if="replying" class="w-4 h-4 animate-spin" />
           <Send v-else class="w-4 h-4" />
-        </button>
+        </Button>
       </div>
     </div>
   </div>

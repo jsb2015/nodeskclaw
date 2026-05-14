@@ -64,6 +64,10 @@ const selectedRuntime = ref('openclaw')
 // ── Template ──
 import { useGeneStore } from '@/stores/gene'
 import type { TemplateInfo } from '@/stores/gene'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 
 const geneStore = useGeneStore()
 const selectedTemplate = ref<TemplateInfo | null>(null)
@@ -633,9 +637,9 @@ async function handleDeploy() {
 <template>
   <div class="max-w-2xl mx-auto px-6 py-8">
     <div class="flex items-center gap-3 mb-6">
-      <button class="p-1.5 rounded-lg hover:bg-muted transition-colors" @click="currentStep === 1 ? router.push('/instances') : currentStep = 1">
+      <Button variant="unstyled" size="unstyled" class="p-1.5 rounded-lg hover:bg-muted transition-colors" @click="currentStep === 1 ? router.push('/instances') : currentStep = 1">
         <ArrowLeft class="w-5 h-5" />
-      </button>
+      </Button>
       <div>
         <h1 class="text-xl font-bold">{{ t('createInstance.pageTitle') }}</h1>
         <p class="text-sm text-muted-foreground mt-0.5">{{ t('createInstance.pageSubtitle') }}</p>
@@ -654,18 +658,18 @@ async function handleDeploy() {
           {{ isEE ? t('createInstance.noClusterDescEE') : t('createInstance.noClusterDesc') }}
         </span>
       </div>
-      <button
+      <Button variant="unstyled" size="unstyled"
         v-if="!isEE"
         class="shrink-0 px-3 py-1.5 rounded-md bg-amber-500/10 text-amber-500 text-xs font-medium hover:bg-amber-500/20 transition-colors"
         @click="router.push('/org-settings/clusters')"
       >
         {{ t('createInstance.goSetupCluster') }}
-      </button>
+      </Button>
     </div>
 
     <!-- 步骤指示器 -->
     <div class="flex items-center gap-3 mb-8">
-      <button
+      <Button variant="unstyled" size="unstyled"
         class="flex items-center gap-2 text-sm transition-colors"
         :class="currentStep === 1 ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'"
         @click="currentStep = 1"
@@ -675,10 +679,10 @@ async function handleDeploy() {
           :class="currentStep >= 1 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'"
         >1</span>
         {{ t('createInstance.stepBasicInfo') }}
-      </button>
+      </Button>
       <template v-if="runtimeHasLlm">
         <div class="flex-1 h-px" :class="currentStep >= 2 ? 'bg-primary' : 'bg-border'" />
-        <button
+        <Button variant="unstyled" size="unstyled"
           class="flex items-center gap-2 text-sm transition-colors"
           :class="currentStep === 2 ? 'text-primary font-medium' : 'text-muted-foreground'"
           :disabled="!canGoNext"
@@ -689,7 +693,7 @@ async function handleDeploy() {
             :class="currentStep >= 2 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'"
           >2</span>
           {{ t('createInstance.stepLlmConfig') }}
-        </button>
+        </Button>
       </template>
     </div>
 
@@ -708,7 +712,7 @@ async function handleDeploy() {
         <!-- 名称 -->
         <div class="space-y-2">
           <label class="text-sm font-medium">{{ t('createInstance.nameLabel') }}</label>
-          <input
+          <Input
             v-model="name"
             type="text"
             :placeholder="t('createInstance.namePlaceholder')"
@@ -729,7 +733,7 @@ async function handleDeploy() {
           </div>
           <div class="flex items-center gap-0">
             <div class="flex-1">
-              <input
+              <Input
                 v-model="slug"
                 type="text"
                 :placeholder="t('createInstance.slugPlaceholder')"
@@ -769,18 +773,18 @@ async function handleDeploy() {
           </div>
           <p class="text-xs text-muted-foreground">{{ t('createInstance.clusterHint') }}</p>
           <div class="relative">
-            <button
+            <Button variant="unstyled" size="unstyled"
               class="w-full flex items-center justify-between px-4 py-2.5 rounded-lg bg-card border border-border text-sm hover:border-primary/50 transition-colors text-left"
               @click="clusterDropdownOpen = !clusterDropdownOpen"
             >
               <span>{{ selectedClusterObj?.name || t('createInstance.clusterLabel') }}</span>
               <ChevronDown class="w-4 h-4 text-muted-foreground transition-transform" :class="clusterDropdownOpen ? 'rotate-180' : ''" />
-            </button>
+            </Button>
             <div
               v-if="clusterDropdownOpen"
               class="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto rounded-lg border border-border bg-popover shadow-lg"
             >
-              <button
+              <Button variant="unstyled" size="unstyled"
                 v-for="c in clusters"
                 :key="c.id"
                 class="w-full px-4 py-2.5 text-left text-sm hover:bg-accent transition-colors flex items-center justify-between"
@@ -789,7 +793,7 @@ async function handleDeploy() {
               >
                 <span>{{ c.name }}</span>
                 <Check v-if="c.id === selectedCluster" class="w-4 h-4 text-primary shrink-0" />
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -835,28 +839,28 @@ async function handleDeploy() {
               <div v-if="selectedRuntime === eng.runtime_id" class="border-t border-border mt-3 pt-3" @click.stop>
                 <div class="flex items-center justify-between mb-1.5">
                   <span class="text-xs font-medium text-muted-foreground">{{ t('engine.imageVersion') }}</span>
-                  <button
+                  <Button variant="unstyled" size="unstyled"
                     class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
                     :disabled="loadingTags"
                     @click="fetchImageTags"
                   >
                     <RefreshCw class="w-3 h-3" :class="loadingTags ? 'animate-spin' : ''" />
                     {{ t('engine.refresh') }}
-                  </button>
+                  </Button>
                 </div>
                 <div v-if="imageTags.length > 0" class="relative">
-                  <button
+                  <Button variant="unstyled" size="unstyled"
                     class="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-card border border-border text-sm hover:border-primary/50 transition-colors text-left"
                     @click="imageDropdownOpen = !imageDropdownOpen"
                   >
                     <span class="font-mono text-xs">{{ selectedImage || t('engine.selectVersion') }}</span>
                     <ChevronDown class="w-3.5 h-3.5 text-muted-foreground transition-transform" :class="imageDropdownOpen ? 'rotate-180' : ''" />
-                  </button>
+                  </Button>
                   <div
                     v-if="imageDropdownOpen"
                     class="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto rounded-lg border border-border bg-card shadow-lg"
                   >
-                    <button
+                    <Button variant="unstyled" size="unstyled"
                       v-for="ev in engineVersions"
                       :key="ev.id"
                       class="w-full px-3 py-1.5 text-left text-xs font-mono hover:bg-accent transition-colors"
@@ -865,17 +869,17 @@ async function handleDeploy() {
                     >
                       {{ ev.image_tag }}
                       <span v-if="ev.is_default" class="ml-2 text-[10px] font-sans text-muted-foreground">({{ t('engine.defaultTag') }})</span>
-                    </button>
+                    </Button>
                   </div>
                 </div>
                 <div v-else>
                   <p class="text-xs text-muted-foreground py-2">
                     {{ t('engine.noVersionsPublished') }}
-                    <button
+                    <Button variant="unstyled" size="unstyled"
                       v-if="authStore.systemInfo?.edition !== 'ee'"
                       class="text-primary hover:underline ml-1"
                       @click="router.push({ name: 'OrgSettingsEngineVersions' })"
-                    >{{ t('engine.goToVersionSettings') }}</button>
+                    >{{ t('engine.goToVersionSettings') }}</Button>
                   </p>
                 </div>
               </div>
@@ -887,24 +891,24 @@ async function handleDeploy() {
         <div class="space-y-3">
           <label class="text-sm font-medium">{{ t('createInstance.specLabel') }}</label>
           <div class="grid grid-cols-3 gap-3">
-            <button
+            <Button variant="unstyled" size="unstyled"
               v-for="spec in specPresets"
               :key="spec.key"
               :class="[
-                'p-4 rounded-xl border text-left transition-all',
+                'w-full min-w-0 h-auto shrink flex-col items-start justify-start p-4 rounded-xl border text-left whitespace-normal transition-all',
                 selectedSpec === spec.key
                   ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
                   : 'border-border bg-card hover:border-primary/20',
               ]"
               @click="selectSpec(spec.key)"
             >
-              <div class="font-medium text-sm">{{ spec.label }}</div>
-              <div class="text-xs text-muted-foreground mt-0.5">{{ spec.desc }}</div>
-              <div class="flex gap-3 mt-2 text-xs text-muted-foreground">
-                <span>{{ spec.cpu }} {{ t('orgSettings.specsCpuUnit') }}</span>
-                <span>{{ spec.memory }} GB</span>
+              <div class="w-full font-medium text-sm">{{ spec.label }}</div>
+              <div class="w-full text-xs text-muted-foreground mt-0.5 break-words leading-relaxed">{{ spec.desc }}</div>
+              <div class="w-full flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-muted-foreground">
+                <span class="whitespace-nowrap">{{ spec.cpu }} {{ t('orgSettings.specsCpuUnit') }}</span>
+                <span class="whitespace-nowrap">{{ spec.memory }} GB</span>
               </div>
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -933,20 +937,20 @@ async function handleDeploy() {
                 <div class="flex items-center gap-2">
                   <HardDrive class="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                   <span class="text-xs text-muted-foreground">{{ t('engine.storageClass') }}:</span>
-                  <button
+                  <Button variant="unstyled" size="unstyled"
                     class="flex items-center gap-1 px-2 py-1 rounded-md border border-border bg-card text-xs font-mono hover:border-primary/40 transition-colors"
                     @click.stop="scDropdownOpen = !scDropdownOpen"
                   >
                     <span :class="selectedStorageClass ? '' : 'text-muted-foreground'">{{ selectedStorageClass || t('engine.storageClassPlaceholder') }}</span>
                     <span v-if="storageClasses.find(sc => sc.name === selectedStorageClass)?.is_default" class="text-muted-foreground">{{ t('engine.storageClassDefault') }}</span>
                     <ChevronDown class="w-3 h-3 text-muted-foreground" />
-                  </button>
+                  </Button>
                 </div>
                 <div
                   v-if="scDropdownOpen"
                   class="absolute left-0 top-full mt-1 z-20 w-72 max-h-48 overflow-y-auto rounded-lg border border-border bg-popover shadow-lg"
                 >
-                  <button
+                  <Button variant="unstyled" size="unstyled"
                     v-for="sc in storageClasses"
                     :key="sc.name"
                     class="w-full text-left px-3 py-2 text-xs transition-colors flex items-center justify-between"
@@ -963,7 +967,7 @@ async function handleDeploy() {
                     </span>
                     <Check v-if="sc.name === selectedStorageClass" class="w-3.5 h-3.5 text-primary shrink-0" />
                     <span v-else-if="!sc.enabled" class="text-[10px] text-muted-foreground">{{ t('engine.storageClassDisabled') }}</span>
-                  </button>
+                  </Button>
                 </div>
               </div>
             </template>
@@ -976,7 +980,7 @@ async function handleDeploy() {
               <span class="text-xs text-muted-foreground">{{ t('engine.pvcAccessMode') }}:</span>
             </div>
             <div class="flex gap-2">
-              <button
+              <Button variant="unstyled" size="unstyled"
                 v-for="mode in ([
                   { value: 'ReadWriteOnce', label: t('engine.pvcAccessModeRWO'), desc: t('engine.pvcAccessModeRWODesc') },
                   { value: 'ReadWriteMany', label: t('engine.pvcAccessModeRWX'), desc: t('engine.pvcAccessModeRWXDesc') },
@@ -990,12 +994,12 @@ async function handleDeploy() {
               >
                 <span class="font-medium" :class="pvcAccessMode === mode.value ? 'text-primary' : ''">{{ mode.label }}</span>
                 <span class="block text-[10px] text-muted-foreground mt-0.5">{{ mode.desc }}</span>
-              </button>
+              </Button>
             </div>
           </div>
 
           <div class="space-y-2">
-            <input
+            <Input
               type="range"
               :min="0"
               :max="storageAnchors.length - 1"
@@ -1024,7 +1028,7 @@ async function handleDeploy() {
 
         <!-- 下一步 / 直接部署 -->
         <div class="pt-4">
-          <button
+          <Button variant="unstyled" size="unstyled"
             v-if="runtimeHasLlm"
             :disabled="!canGoNext"
             class="w-full py-3 px-4 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
@@ -1032,8 +1036,8 @@ async function handleDeploy() {
           >
             {{ t('createInstance.nextStep') }}
             <ArrowRight class="w-4 h-4" />
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled" size="unstyled"
             v-else
             :disabled="!canDeploy"
             class="w-full py-3 px-4 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
@@ -1042,7 +1046,7 @@ async function handleDeploy() {
             <Loader2 v-if="deploying" class="w-4 h-4 animate-spin" />
             <Rocket v-else class="w-4 h-4" />
             {{ deploying ? t('createInstance.deploying') : t('createInstance.deployButton') }}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -1067,9 +1071,9 @@ async function handleDeploy() {
                     {{ orgKeyLabel }}
                   </span>
                 </div>
-                <button class="text-muted-foreground hover:text-destructive transition-colors" @click="removeProvider(idx)">
+                <Button variant="unstyled" size="unstyled" class="text-muted-foreground hover:text-destructive transition-colors" @click="removeProvider(idx)">
                   <Trash2 class="w-4 h-4" />
-                </button>
+                </Button>
               </div>
 
               <!-- API type selector (custom only) -->
@@ -1078,26 +1082,30 @@ async function handleDeploy() {
                 <template v-if="cfg.keySource === 'org'">
                   <span class="text-xs">{{ cfg.apiType === 'anthropic-messages' ? t('llm.apiTypeAnthropic') : t('llm.apiTypeOpenai') }}</span>
                 </template>
-                <template v-else>
+                <RadioGroup v-else v-model="cfg.apiType" class="flex flex-row gap-4">
                   <label class="flex items-center gap-1.5 cursor-pointer text-xs">
-                    <input type="radio" :name="`apitype-${cfg.provider}`" value="openai-completions" v-model="cfg.apiType" class="accent-primary" />
+                    <RadioGroupItem value="openai-completions" />
                     {{ t('llm.apiTypeOpenai') }}
                   </label>
                   <label class="flex items-center gap-1.5 cursor-pointer text-xs">
-                    <input type="radio" :name="`apitype-${cfg.provider}`" value="anthropic-messages" v-model="cfg.apiType" class="accent-primary" />
+                    <RadioGroupItem value="anthropic-messages" />
                     {{ t('llm.apiTypeAnthropic') }}
                   </label>
-                </template>
+                </RadioGroup>
               </div>
 
               <div class="space-y-2">
-                <div v-if="(!cfg.isCustom || isOrgKeyAvailable(cfg.provider)) && !isCodexProvider(cfg.provider)" class="flex gap-4 text-sm">
+                <RadioGroup
+                  v-if="(!cfg.isCustom || isOrgKeyAvailable(cfg.provider)) && !isCodexProvider(cfg.provider)"
+                  v-model="cfg.keySource"
+                  class="flex flex-row gap-4 text-sm"
+                >
                   <span class="relative group">
                     <label
                       class="flex items-center gap-1.5"
                       :class="isOrgKeyAvailable(cfg.provider) ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'"
                     >
-                      <input type="radio" :name="`llm-${cfg.provider}`" value="org" v-model="cfg.keySource" class="accent-primary" :disabled="!isOrgKeyAvailable(cfg.provider)" />
+                      <RadioGroupItem value="org" :disabled="!isOrgKeyAvailable(cfg.provider)" />
                       {{ orgKeyLabel }}
                     </label>
                     <span
@@ -1108,10 +1116,10 @@ async function handleDeploy() {
                     </span>
                   </span>
                   <label class="flex items-center gap-1.5 cursor-pointer">
-                    <input type="radio" :name="`llm-${cfg.provider}`" value="personal" v-model="cfg.keySource" class="accent-primary" />
+                    <RadioGroupItem value="personal" />
                     {{ t('llm.personalKey') }}
                   </label>
-                </div>
+                </RadioGroup>
 
                 <p v-else-if="isCodexProvider(cfg.provider)" class="text-xs text-muted-foreground pl-0.5">
                   {{ t('llm.codexCliHint') }}
@@ -1129,14 +1137,14 @@ async function handleDeploy() {
                     <div class="flex items-center gap-2">
                       <div class="relative flex-1">
                         <Key class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                        <input
+                        <Input
                           v-model="cfg.personalKey"
                           type="password"
                           :placeholder="t('createInstance.apiKeyPlaceholder')"
                           class="w-full pl-9 pr-3 py-1.5 rounded-md bg-background border border-border text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary/50"
                         />
                       </div>
-                      <button
+                      <Button variant="unstyled" size="unstyled"
                         v-if="cfg.personalKey"
                         class="shrink-0 flex items-center gap-1 px-2 py-1.5 rounded-md border border-border text-xs hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         :disabled="testingProvider === idx"
@@ -1145,7 +1153,7 @@ async function handleDeploy() {
                         <Loader2 v-if="testingProvider === idx" class="w-3.5 h-3.5 animate-spin" />
                         <Zap v-else class="w-3.5 h-3.5" />
                         {{ t('llm.testKey') }}
-                      </button>
+                      </Button>
                       <span v-if="testResults[idx]?.ok" class="shrink-0 flex items-center gap-1 text-xs text-green-500">
                         <CheckCircle class="w-3.5 h-3.5" />
                         {{ testResults[idx].tested_model ? t('llm.testConnectionModel', { model: testResults[idx].tested_model }) : t('llm.testKeyAvailable') }}
@@ -1168,18 +1176,18 @@ async function handleDeploy() {
                         @clear="cfg.baseUrl = ''; cfg.showBaseUrl = false"
                       />
                       <label v-if="cfg.baseUrl" class="flex items-center gap-2 mt-1.5 cursor-pointer">
-                        <input type="checkbox" v-model="cfg.skipSslVerify" class="accent-primary" />
+                        <Checkbox v-model:checked="cfg.skipSslVerify" />
                         <span class="text-xs">{{ t('orgSettings.llmKeysSkipSslVerify') }}</span>
                         <span class="text-xs text-muted-foreground">{{ t('orgSettings.llmKeysSkipSslVerifyHint') }}</span>
                       </label>
                     </div>
-                    <button
+                    <Button variant="unstyled" size="unstyled"
                       v-if="!cfg.isCustom && !cfg.showBaseUrl"
                       class="text-xs text-muted-foreground hover:text-foreground transition-colors"
                       @click="cfg.showBaseUrl = true"
                     >
                       {{ t('llm.customBaseUrl') }}
-                    </button>
+                    </Button>
                   </template>
                 </div>
               </div>
@@ -1199,7 +1207,7 @@ async function handleDeploy() {
             <!-- 选择 Provider -->
             <div v-if="unusedProviders.length > 0" class="space-y-2">
               <div class="grid grid-cols-2 gap-2">
-                <button
+                <Button variant="unstyled" size="unstyled"
                   v-for="p in unusedProviders"
                   :key="p"
                   class="px-4 py-3 rounded-lg border border-border bg-card text-sm text-left hover:border-primary/50 hover:bg-primary/5 transition-colors"
@@ -1212,8 +1220,8 @@ async function handleDeploy() {
                       {{ orgKeyLabel }}
                     </span>
                   </div>
-                </button>
-                <button
+                </Button>
+                <Button variant="unstyled" size="unstyled"
                   v-for="ocp in orgCustomProviders"
                   :key="ocp.provider"
                   class="px-4 py-3 rounded-lg border border-border bg-card text-sm text-left hover:border-primary/50 hover:bg-primary/5 transition-colors"
@@ -1226,8 +1234,8 @@ async function handleDeploy() {
                       {{ orgKeyLabel }}
                     </span>
                   </div>
-                </button>
-                <button
+                </Button>
+                <Button variant="unstyled" size="unstyled"
                   class="px-4 py-3 rounded-lg border border-dashed border-violet-400/50 bg-card text-sm text-left hover:border-violet-400 hover:bg-violet-500/5 transition-colors text-violet-400"
                   @click="showCustomForm = true"
                 >
@@ -1235,7 +1243,7 @@ async function handleDeploy() {
                     <Plus class="w-3.5 h-3.5" />
                     {{ t('llm.addCustomProvider') }}
                   </div>
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -1243,13 +1251,13 @@ async function handleDeploy() {
             <div v-if="showCustomForm" class="rounded-lg border border-violet-400/30 bg-violet-500/5 p-4 space-y-3">
               <div class="flex items-center justify-between">
                 <span class="font-medium text-sm text-violet-400">{{ t('llm.customProvider') }}</span>
-                <button class="text-muted-foreground hover:text-foreground text-xs" @click="showCustomForm = false; customSlug = ''; customSlugError = ''">
+                <Button variant="unstyled" size="unstyled" class="text-muted-foreground hover:text-foreground text-xs" @click="showCustomForm = false; customSlug = ''; customSlugError = ''">
                   {{ t('common.cancel') }}
-                </button>
+                </Button>
               </div>
               <div class="space-y-1.5">
                 <label class="text-xs text-muted-foreground">{{ t('llm.providerSlug') }}</label>
-                <input
+                <Input
                   v-model="customSlug"
                   type="text"
                   maxlength="32"
@@ -1260,13 +1268,13 @@ async function handleDeploy() {
                 <p v-if="customSlugError" class="text-[10px] text-destructive">{{ customSlugError }}</p>
                 <p v-else class="text-[10px] text-muted-foreground">{{ t('llm.providerSlugHint') }}</p>
               </div>
-              <button
+              <Button variant="unstyled" size="unstyled"
                 class="px-4 py-1.5 rounded-md bg-violet-500/10 text-violet-400 text-sm hover:bg-violet-500/20 transition-colors"
                 :disabled="!customSlug.trim()"
                 @click="addCustomProvider"
               >
                 {{ t('common.add') }}
-              </button>
+              </Button>
             </div>
         </div>
 
@@ -1290,7 +1298,7 @@ async function handleDeploy() {
               </template>
             </div>
           </div>
-          <button
+          <Button variant="unstyled" size="unstyled"
             :disabled="!canDeploy"
             class="w-full py-3 px-4 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             @click="handleDeploy"
@@ -1298,7 +1306,7 @@ async function handleDeploy() {
             <Loader2 v-if="deploying" class="w-4 h-4 animate-spin" />
             <Rocket v-else class="w-4 h-4" />
             {{ deploying ? t('createInstance.deploying') : t('createInstance.deployNow') }}
-          </button>
+          </Button>
         </div>
       </div>
     </template>

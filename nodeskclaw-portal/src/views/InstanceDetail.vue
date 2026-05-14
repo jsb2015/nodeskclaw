@@ -13,6 +13,10 @@ import { getStatusDisplay } from '@/utils/instanceStatus'
 import { copyToClipboard } from '@/utils/clipboard'
 import { formatDateTime, formatNumber } from '@/utils/localeFormat'
 import { buildEngineInfoMap } from '@/utils/instanceFlow'
+import { getRuntimeDefaultCapabilities } from '@/utils/runtimeCapabilities'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
 
 const router = useRouter()
 const toast = useToast()
@@ -66,6 +70,7 @@ interface EngineInfo {
 }
 const ENGINE_INFO: Record<string, EngineInfo> = buildEngineInfoMap(t)
 const engineInfo = computed(() => ENGINE_INFO[instance.value?.runtime ?? 'openclaw'] ?? null)
+const defaultCapabilities = computed(() => getRuntimeDefaultCapabilities(instance.value?.runtime ?? 'openclaw'))
 const loading = ref(true)
 const pageError = ref('')
 const gatewayToken = ref('')
@@ -396,7 +401,7 @@ function toggleSkillEditor() {
               {{ restarting ? t('agentDetailDialog.accessTokenRestartingHint') : t('agentDetailDialog.accessTokenHint') }}
             </p>
           </div>
-          <button
+          <Button variant="unstyled" size="unstyled"
             class="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             :disabled="restarting || resettingToken"
             @click="handleResetToken"
@@ -404,18 +409,18 @@ function toggleSkillEditor() {
             <Loader2 v-if="resettingToken" class="w-4 h-4 animate-spin" />
             <RotateCcw v-else class="w-4 h-4" />
             {{ resettingToken ? t('agentDetailDialog.resettingToken') : t('agentDetailDialog.resetToken') }}
-          </button>
+          </Button>
         </div>
         <div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-background/60 border border-border/50">
           <span class="flex-1 text-xs font-mono break-all text-foreground/80">{{ maskedGatewayToken }}</span>
-          <button
+          <Button variant="unstyled" size="unstyled"
             class="shrink-0 p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
             :disabled="!gatewayToken"
             @click="copyToken"
           >
             <Check v-if="tokenCopied" class="w-3.5 h-3.5 text-green-400" />
             <Copy v-else class="w-3.5 h-3.5" />
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -498,6 +503,22 @@ function toggleSkillEditor() {
         </div>
       </div>
 
+      <div v-if="defaultCapabilities.length" class="p-4 rounded-xl border border-border bg-card">
+        <h2 class="text-sm font-medium mb-3">{{ t('agentDetailDialog.defaultCapabilities') }}</h2>
+        <div class="grid gap-2 sm:grid-cols-3">
+          <div
+            v-for="capability in defaultCapabilities"
+            :key="capability.id"
+            class="rounded-lg bg-muted/30 p-3"
+          >
+            <div class="text-sm font-medium">{{ t(capability.labelKey) }}</div>
+            <div class="text-xs text-muted-foreground mt-1 leading-relaxed">
+              {{ t(capability.descriptionKey) }}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div v-if="restarting" class="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5">
         <div class="flex items-center gap-2 text-sm text-amber-400">
           <Loader2 class="w-4 h-4 animate-spin" />
@@ -507,14 +528,14 @@ function toggleSkillEditor() {
 
       <!-- 操作 -->
       <div class="flex items-center gap-3 pt-4 border-t border-border flex-wrap">
-        <button
+        <Button variant="unstyled" size="unstyled"
           class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-border text-sm hover:bg-card transition-colors"
           @click="fetchDetail"
         >
           <RefreshCw class="w-4 h-4" />
           {{ t('agentDetailDialog.refresh') }}
-        </button>
-        <button
+        </Button>
+        <Button variant="unstyled" size="unstyled"
           v-if="canEdit"
           class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-amber-500/30 text-amber-400 text-sm hover:bg-amber-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           :disabled="restarting"
@@ -522,32 +543,32 @@ function toggleSkillEditor() {
         >
           <RotateCcw class="w-4 h-4" :class="restarting ? 'animate-spin' : ''" />
           {{ restarting ? t('agentDetailDialog.restarting') : t('agentDetailDialog.restart') }}
-        </button>
-        <button
+        </Button>
+        <Button variant="unstyled" size="unstyled"
           v-if="canEdit && instance?.status === 'running'"
           class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-border text-sm hover:bg-card transition-colors"
           @click="handleBackup"
         >
           <Archive class="w-4 h-4" />
           {{ t('backup.create') }}
-        </button>
-        <button
+        </Button>
+        <Button variant="unstyled" size="unstyled"
           v-if="canAdmin && instance?.status === 'running'"
           class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-border text-sm hover:bg-card transition-colors"
           @click="showCloneDialog = true"
         >
           <CopyPlus class="w-4 h-4" />
           {{ t('backup.clone') }}
-        </button>
-        <button
+        </Button>
+        <Button variant="unstyled" size="unstyled"
           v-if="canAdmin && (instance?.status === 'failed' || instance?.health_status === 'unhealthy')"
           class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-amber-500/30 text-amber-400 text-sm hover:bg-amber-500/10 transition-colors"
           @click="handleRebuild"
         >
           <Wrench class="w-4 h-4" />
           {{ t('backup.rebuild') }}
-        </button>
-        <button
+        </Button>
+        <Button variant="unstyled" size="unstyled"
           v-if="canAdmin"
           class="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-red-500/30 text-red-400 text-sm hover:bg-red-500/10 transition-colors ml-auto disabled:opacity-50 disabled:cursor-not-allowed"
           :disabled="deleting"
@@ -556,12 +577,12 @@ function toggleSkillEditor() {
           <Loader2 v-if="deleting" class="w-4 h-4 animate-spin" />
           <Trash2 v-else class="w-4 h-4" />
           {{ deleting ? t('agentDetailDialog.deleting') : t('agentDetailDialog.delete') }}
-        </button>
+        </Button>
       </div>
 
       <!-- 角色与提示词 -->
       <div class="rounded-xl border border-border bg-card overflow-hidden">
-        <button
+        <Button variant="unstyled" size="unstyled"
           class="flex items-center justify-between w-full px-4 py-3 text-left hover:bg-muted/30 transition-colors"
           @click="toggleSkillEditor"
         >
@@ -574,7 +595,7 @@ function toggleSkillEditor() {
               class="text-xs px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground"
             >{{ skills.length }}</span>
           </div>
-        </button>
+        </Button>
 
         <div v-if="skillEditorOpen" class="border-t border-border">
           <div v-if="!skills.length && !skillLoading" class="px-4 py-8 text-center text-sm text-muted-foreground">
@@ -582,7 +603,7 @@ function toggleSkillEditor() {
           </div>
           <template v-else>
             <div class="flex gap-1 px-4 pt-3 pb-0 overflow-x-auto">
-              <button
+              <Button variant="unstyled" size="unstyled"
                 v-for="s in skills"
                 :key="s.skill_name"
                 class="px-3 py-1.5 text-xs rounded-t-lg border border-b-0 transition-colors whitespace-nowrap"
@@ -590,7 +611,7 @@ function toggleSkillEditor() {
                   ? 'bg-card border-border text-foreground font-medium'
                   : 'bg-transparent border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30'"
                 @click="selectSkill(s.skill_name)"
-              >{{ s.name }}</button>
+              >{{ s.name }}</Button>
             </div>
 
             <div class="px-4 pb-4">
@@ -598,7 +619,7 @@ function toggleSkillEditor() {
                 <Loader2 class="w-5 h-5 animate-spin text-muted-foreground" />
               </div>
               <template v-else>
-                <textarea
+                <Textarea
                   v-model="skillContent"
                   class="w-full h-80 px-3 py-2 rounded-lg border border-border bg-background text-sm font-mono resize-y scrollbar-compact"
                   :readonly="!canEdit"
@@ -606,7 +627,7 @@ function toggleSkillEditor() {
                 />
                 <div class="flex items-center justify-between mt-2">
                   <p class="text-xs text-muted-foreground">{{ t('instanceDetail.skillEditor.restartHint') }}</p>
-                  <button
+                  <Button variant="unstyled" size="unstyled"
                     v-if="canEdit"
                     class="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     :class="skillDirty
@@ -618,7 +639,7 @@ function toggleSkillEditor() {
                     <Loader2 v-if="skillSaving" class="w-3.5 h-3.5 animate-spin" />
                     <Save v-else class="w-3.5 h-3.5" />
                     {{ t('instanceDetail.skillEditor.save') }}
-                  </button>
+                  </Button>
                 </div>
               </template>
             </div>
@@ -636,25 +657,25 @@ function toggleSkillEditor() {
               <p class="text-sm text-muted-foreground">{{ t('backup.confirmClone') }}</p>
               <div>
                 <label class="block text-sm mb-1.5">{{ t('backup.cloneNameLabel') }}</label>
-                <input
+                <Input
                   v-model="cloneName"
                   class="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm"
                   :placeholder="t('backup.cloneNamePlaceholder')"
                 />
               </div>
               <div class="flex justify-end gap-2">
-                <button
+                <Button variant="unstyled" size="unstyled"
                   class="px-4 py-2 rounded-lg border border-border text-sm hover:bg-card transition-colors"
                   @click="showCloneDialog = false"
-                >{{ t('common.cancel') }}</button>
-                <button
+                >{{ t('common.cancel') }}</Button>
+                <Button variant="unstyled" size="unstyled"
                   class="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 disabled:opacity-50"
                   :disabled="!cloneName.trim() || cloning"
                   @click="handleClone"
                 >
                   <Loader2 v-if="cloning" class="w-4 h-4 animate-spin inline mr-1" />
                   {{ t('backup.startClone') }}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -683,18 +704,18 @@ function toggleSkillEditor() {
               </ul>
             </div>
             <div class="flex justify-end gap-3 pt-2">
-              <button
+              <Button variant="unstyled" size="unstyled"
                 class="px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
                 @click="showRestartDialog = false"
               >
                 {{ t('common.cancel') }}
-              </button>
-              <button
+              </Button>
+              <Button variant="unstyled" size="unstyled"
                 class="px-4 py-2 rounded-lg bg-amber-500 text-white text-sm font-medium hover:bg-amber-600 transition-colors"
                 @click="handleRestart"
               >
                 {{ t('instanceDetail.confirmRestart') }}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -736,19 +757,19 @@ function toggleSkillEditor() {
               </ul>
             </div>
             <div class="flex justify-end gap-3 pt-2">
-              <button
+              <Button variant="unstyled" size="unstyled"
                 class="px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
                 @click="showDeleteDialog = false"
               >
                 {{ instance?.workspaces?.length ? t('common.close') : t('common.cancel') }}
-              </button>
-              <button
+              </Button>
+              <Button variant="unstyled" size="unstyled"
                 v-if="!instance?.workspaces?.length"
                 class="px-4 py-2 rounded-lg bg-red-500 text-white text-sm font-medium hover:bg-red-600 transition-colors"
                 @click="handleDelete"
               >
                 {{ t('common.delete') }}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

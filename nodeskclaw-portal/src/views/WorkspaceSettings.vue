@@ -16,6 +16,11 @@ import { resolveApiErrorMessage } from '@/i18n/error'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
 import CustomSelect from '@/components/shared/CustomSelect.vue'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
   buildTopoNodes,
   buildTopoEdges,
@@ -450,15 +455,15 @@ async function handleRemoveMember(member: WorkspaceMemberInfo) {
         <div class="bg-card rounded-xl shadow-2xl w-full max-w-xl border border-border max-h-[90vh] flex flex-col">
           <div class="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
             <h3 class="text-base font-semibold">{{ t('workspaceSettings.title') }}</h3>
-            <button type="button" class="p-1 rounded hover:bg-muted" @click="emit('update:open', false)">
+            <Button variant="unstyled" size="unstyled" type="button" class="p-1 rounded hover:bg-muted" @click="emit('update:open', false)">
               <X class="w-4 h-4" />
-            </button>
+            </Button>
           </div>
           <div class="px-5 py-5 space-y-6 overflow-y-auto">
       <!-- Basic Settings -->
       <div class="space-y-2">
         <label class="text-sm font-medium">{{ t('workspaceSettings.nameLabel') }}</label>
-        <input
+        <Input
           v-model="name"
           :disabled="!canManageSettings"
           class="w-full px-3 py-2 rounded-lg bg-muted border border-border text-sm outline-none focus:ring-1 focus:ring-primary/50 disabled:opacity-50"
@@ -467,7 +472,7 @@ async function handleRemoveMember(member: WorkspaceMemberInfo) {
 
       <div class="space-y-2">
         <label class="text-sm font-medium">{{ t('workspaceSettings.descriptionLabel') }}</label>
-        <textarea
+        <Textarea
           v-model="description"
           :disabled="!canManageSettings"
           rows="3"
@@ -481,7 +486,7 @@ async function handleRemoveMember(member: WorkspaceMemberInfo) {
           {{ t('workspaceSettings.themeColor') }}
         </label>
         <div class="flex gap-2">
-          <button
+          <Button variant="unstyled" size="unstyled"
             v-for="c in colors"
             :key="c"
             class="w-8 h-8 rounded-full border-2 transition-all"
@@ -502,14 +507,14 @@ async function handleRemoveMember(member: WorkspaceMemberInfo) {
             <Users class="w-4 h-4 text-muted-foreground" />
             {{ t('workspaceSettings.members', { count: store.members.length }) }}
           </h3>
-          <button
+          <Button variant="unstyled" size="unstyled"
             v-if="canManageMembers"
             class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
             @click="openAddDialog"
           >
             <UserPlus class="w-3.5 h-3.5" />
             {{ t('workspaceSettings.addMember') }}
-          </button>
+          </Button>
         </div>
 
         <div class="space-y-2">
@@ -541,14 +546,14 @@ async function handleRemoveMember(member: WorkspaceMemberInfo) {
                 </div>
               </div>
               <div v-if="canManageMembers" class="flex items-center gap-1 shrink-0">
-                <button
+                <Button variant="unstyled" size="unstyled"
                   class="p-1 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
                   :title="t('workspaceSettings.editPermissions')"
                   @click="editingMemberId === m.user_id ? cancelEdit() : startEdit(m)"
                 >
                   <Shield class="w-3.5 h-3.5" />
-                </button>
-                <button
+                </Button>
+                <Button variant="unstyled" size="unstyled"
                   v-if="m.user_id !== authStore.user?.id"
                   class="p-1 rounded hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive"
                   :disabled="removingUserId === m.user_id"
@@ -556,7 +561,7 @@ async function handleRemoveMember(member: WorkspaceMemberInfo) {
                 >
                   <Loader2 v-if="removingUserId === m.user_id" class="w-3.5 h-3.5 animate-spin" />
                   <Trash2 v-else class="w-3.5 h-3.5" />
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -579,28 +584,26 @@ async function handleRemoveMember(member: WorkspaceMemberInfo) {
                   class="flex items-center gap-1.5 text-xs cursor-pointer select-none"
                   :class="editIsAdmin ? 'opacity-50' : ''"
                 >
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     :checked="editPermissions.includes(perm)"
                     :disabled="editIsAdmin"
-                    class="rounded border-border"
-                    @change="onEditPermToggle(perm)"
+                    @update:checked="onEditPermToggle(perm)"
                   />
                   {{ permLabel(perm) }}
                 </label>
               </div>
               <div class="flex justify-end gap-2">
-                <button class="px-3 py-1 text-xs rounded bg-muted hover:bg-accent transition-colors" @click="cancelEdit">
+                <Button variant="unstyled" size="unstyled" class="px-3 py-1 text-xs rounded bg-muted hover:bg-accent transition-colors" @click="cancelEdit">
                   {{ t('workspaceSettings.cancel') }}
-                </button>
-                <button
+                </Button>
+                <Button variant="unstyled" size="unstyled"
                   class="px-3 py-1 text-xs rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
                   :disabled="editSaving"
                   @click="handleSavePermissions"
                 >
                   <Loader2 v-if="editSaving" class="w-3 h-3 animate-spin inline mr-1" />
                   {{ t('workspaceSettings.save') }}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -609,7 +612,7 @@ async function handleRemoveMember(member: WorkspaceMemberInfo) {
 
       <!-- Save / Template / Delete -->
       <div class="flex gap-3">
-        <button
+        <Button variant="unstyled" size="unstyled"
           v-if="canManageSettings"
           class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
           :disabled="saving"
@@ -618,16 +621,16 @@ async function handleRemoveMember(member: WorkspaceMemberInfo) {
           <Loader2 v-if="saving" class="w-4 h-4 animate-spin" />
           <Save v-else class="w-4 h-4" />
           {{ t('workspaceSettings.save') }}
-        </button>
-        <button
+        </Button>
+        <Button variant="unstyled" size="unstyled"
           v-if="canManageSettings"
           class="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-accent text-accent-foreground text-sm font-medium hover:bg-accent/80 transition-colors"
           @click="openTemplateDialog"
         >
           <LayoutTemplate class="w-4 h-4" />
           {{ t('workspaceSettings.saveAsTemplate') }}
-        </button>
-        <button
+        </Button>
+        <Button variant="unstyled" size="unstyled"
           v-if="canDeleteWorkspace"
           class="px-4 py-2.5 rounded-lg border border-destructive text-destructive text-sm font-medium hover:bg-destructive/10 transition-colors disabled:opacity-50"
           :disabled="deleting"
@@ -635,7 +638,7 @@ async function handleRemoveMember(member: WorkspaceMemberInfo) {
         >
           <Loader2 v-if="deleting" class="w-4 h-4 animate-spin" />
           <Trash2 v-else class="w-4 h-4" />
-        </button>
+        </Button>
       </div>
           </div>
         </div>
@@ -650,30 +653,30 @@ async function handleRemoveMember(member: WorkspaceMemberInfo) {
           <div class="bg-card rounded-xl shadow-2xl w-full max-w-lg border border-border max-h-[90vh] flex flex-col">
             <div class="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
               <h3 class="text-sm font-semibold">{{ t('workspaceSettings.saveAsTemplate') }}</h3>
-              <button type="button" class="p-1 rounded hover:bg-muted" @click="showTemplateDialog = false">
+              <Button variant="unstyled" size="unstyled" type="button" class="p-1 rounded hover:bg-muted" @click="showTemplateDialog = false">
                 <X class="w-4 h-4" />
-              </button>
+              </Button>
             </div>
             <div class="px-5 py-4 space-y-4 overflow-y-auto">
               <div v-if="existingTemplate" class="rounded-lg bg-muted/60 border border-border px-3 py-2.5 space-y-2.5">
                 <p class="text-xs text-muted-foreground">
                   {{ t('workspaceSettings.existingTemplateHint', { name: existingTemplate.name }) }}
                 </p>
-                <div class="flex flex-col gap-1.5">
+                <RadioGroup v-model="overwriteMode" class="flex flex-col gap-1.5">
                   <label class="flex items-center gap-2 text-sm cursor-pointer">
-                    <input v-model="overwriteMode" type="radio" value="overwrite" class="accent-primary" />
+                    <RadioGroupItem value="overwrite" />
                     {{ t('workspaceSettings.overwriteExisting', { name: existingTemplate.name }) }}
                   </label>
                   <label class="flex items-center gap-2 text-sm cursor-pointer">
-                    <input v-model="overwriteMode" type="radio" value="new" class="accent-primary" />
+                    <RadioGroupItem value="new" />
                     {{ t('workspaceSettings.createNew') }}
                   </label>
-                </div>
+                </RadioGroup>
               </div>
 
               <div class="space-y-1.5">
                 <label class="text-xs font-medium text-muted-foreground">{{ t('workspaceSettings.templateNameLabel') }}</label>
-                <input
+                <Input
                   v-model="templateName"
                   class="w-full px-3 py-2 text-sm rounded-lg bg-muted border border-border outline-none focus:ring-1 focus:ring-primary/50"
                   :placeholder="t('workspaceSettings.templateNamePlaceholder')"
@@ -681,7 +684,7 @@ async function handleRemoveMember(member: WorkspaceMemberInfo) {
               </div>
               <div class="space-y-1.5">
                 <label class="text-xs font-medium text-muted-foreground">{{ t('workspaceSettings.templateDescLabel') }}</label>
-                <textarea
+                <Textarea
                   v-model="templateDesc"
                   rows="2"
                   class="w-full px-3 py-2 text-sm rounded-lg bg-muted border border-border outline-none focus:ring-1 focus:ring-primary/50 resize-none"
@@ -746,10 +749,10 @@ async function handleRemoveMember(member: WorkspaceMemberInfo) {
               </div>
 
               <div class="flex justify-end gap-2 shrink-0">
-                <button type="button" class="px-4 py-2 text-sm rounded-lg hover:bg-muted transition-colors" @click="showTemplateDialog = false">
+                <Button variant="unstyled" size="unstyled" type="button" class="px-4 py-2 text-sm rounded-lg hover:bg-muted transition-colors" @click="showTemplateDialog = false">
                   {{ t('workspaceSettings.cancel') }}
-                </button>
-                <button
+                </Button>
+                <Button variant="unstyled" size="unstyled"
                   type="button"
                   class="px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
                   :disabled="savingTemplate || !templateName.trim() || templatePreviewLoading || saveSelectedCount === 0"
@@ -759,7 +762,7 @@ async function handleRemoveMember(member: WorkspaceMemberInfo) {
                   {{ overwriteMode === 'overwrite' && existingTemplate
                     ? t('workspaceSettings.overwriteSave')
                     : t('workspaceSettings.saveTemplateWithCount', { n: saveSelectedCount }) }}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -774,9 +777,9 @@ async function handleRemoveMember(member: WorkspaceMemberInfo) {
           <div class="bg-card rounded-xl shadow-2xl w-full max-w-sm border border-border max-h-[80vh] flex flex-col">
             <div class="flex items-center justify-between px-5 py-3 border-b border-border shrink-0">
               <h3 class="text-sm font-semibold">{{ (selectedSpec.display_name as string) || '—' }}</h3>
-              <button type="button" class="p-1 rounded hover:bg-muted" @click="closeSpecDetail">
+              <Button variant="unstyled" size="unstyled" type="button" class="p-1 rounded hover:bg-muted" @click="closeSpecDetail">
                 <X class="w-4 h-4" />
-              </button>
+              </Button>
             </div>
             <div class="px-5 py-4 space-y-4 overflow-y-auto text-xs">
               <div class="space-y-1.5">
@@ -822,9 +825,9 @@ async function handleRemoveMember(member: WorkspaceMemberInfo) {
           <div class="bg-card rounded-xl shadow-2xl w-[420px] max-h-[80vh] flex flex-col border border-border">
             <div class="flex items-center justify-between px-5 py-4 border-b border-border">
               <h3 class="text-sm font-semibold">{{ t('workspaceSettings.addMemberTitle') }}</h3>
-              <button class="p-1 rounded hover:bg-muted" @click="showAddDialog = false">
+              <Button variant="unstyled" size="unstyled" class="p-1 rounded hover:bg-muted" @click="showAddDialog = false">
                 <X class="w-4 h-4" />
-              </button>
+              </Button>
             </div>
 
             <!-- Preset + Permissions -->
@@ -846,12 +849,10 @@ async function handleRemoveMember(member: WorkspaceMemberInfo) {
                   class="flex items-center gap-1.5 text-xs cursor-pointer select-none"
                   :class="addIsAdmin ? 'opacity-50' : ''"
                 >
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     :checked="addPermissions.includes(perm)"
                     :disabled="addIsAdmin"
-                    class="rounded border-border"
-                    @change="onAddPermToggle(perm)"
+                    @update:checked="onAddPermToggle(perm)"
                   />
                   {{ permLabel(perm) }}
                 </label>
@@ -862,7 +863,7 @@ async function handleRemoveMember(member: WorkspaceMemberInfo) {
             <div class="px-5 py-3 border-b border-border/50">
               <div class="relative">
                 <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                <input
+                <Input
                   v-model="searchQuery"
                   :placeholder="t('workspaceSettings.searchPlaceholder')"
                   class="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg bg-muted border border-border outline-none focus:ring-1 focus:ring-primary/50"
@@ -891,14 +892,14 @@ async function handleRemoveMember(member: WorkspaceMemberInfo) {
                   <p class="text-sm font-medium truncate">{{ u.name }}</p>
                   <p class="text-xs text-muted-foreground truncate">{{ u.email }}</p>
                 </div>
-                <button
+                <Button variant="unstyled" size="unstyled"
                   class="px-2.5 py-1 text-xs rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
                   :disabled="addingUserId === u.user_id"
                   @click="handleAddMember(u.user_id)"
                 >
                   <Loader2 v-if="addingUserId === u.user_id" class="w-3 h-3 animate-spin" />
                   <span v-else>{{ t('workspaceSettings.add') }}</span>
-                </button>
+                </Button>
               </div>
             </div>
           </div>

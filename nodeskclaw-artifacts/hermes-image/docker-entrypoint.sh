@@ -55,10 +55,12 @@ if raw is None:
 if not isinstance(raw, dict):
     print("[entrypoint] config.yaml 根节点不是对象，跳过 memory 默认项注入")
 else:
+    config_changed = False
+    nodeskclaw_changed = False
+
     memory_cfg = raw.get("memory")
     if not isinstance(memory_cfg, dict):
         memory_cfg = {}
-    changed = False
 
     def _env_bool(name: str, default: bool) -> bool:
         value = os.environ.get(name, "")
@@ -68,12 +70,12 @@ else:
 
     if "memory_enabled" not in memory_cfg:
         memory_cfg["memory_enabled"] = _env_bool("HERMES_DEFAULT_MEMORY_ENABLED", True)
-        changed = True
+        config_changed = True
     if "user_profile_enabled" not in memory_cfg:
         memory_cfg["user_profile_enabled"] = _env_bool("HERMES_DEFAULT_USER_PROFILE_ENABLED", True)
-        changed = True
+        config_changed = True
 
-    if changed or "memory" not in raw:
+    if config_changed or "memory" not in raw:
         raw["memory"] = memory_cfg
         config_path.write_text(
             yaml.safe_dump(raw, allow_unicode=True, default_flow_style=False, sort_keys=False),
@@ -84,6 +86,40 @@ else:
             f"(memory_enabled={memory_cfg.get('memory_enabled')}, "
             f"user_profile_enabled={memory_cfg.get('user_profile_enabled')})"
         )
+
+    plugins_cfg = raw.get("plugins")
+    if not isinstance(plugins_cfg, dict):
+        plugins_cfg = {}
+    enabled_plugins = plugins_cfg.get("enabled")
+    if not isinstance(enabled_plugins, list):
+        enabled_plugins = []
+    if "nodeskclaw" not in [str(item) for item in enabled_plugins]:
+        enabled_plugins.append("nodeskclaw")
+        plugins_cfg["enabled"] = enabled_plugins
+        raw["plugins"] = plugins_cfg
+        config_changed = True
+        nodeskclaw_changed = True
+
+    platform_toolsets = raw.get("platform_toolsets")
+    if not isinstance(platform_toolsets, dict):
+        platform_toolsets = {}
+    cli_toolsets = platform_toolsets.get("cli")
+    if not isinstance(cli_toolsets, list):
+        cli_toolsets = ["hermes-cli"]
+    if "nodeskclaw" not in [str(item) for item in cli_toolsets]:
+        cli_toolsets.append("nodeskclaw")
+        platform_toolsets["cli"] = cli_toolsets
+        raw["platform_toolsets"] = platform_toolsets
+        config_changed = True
+        nodeskclaw_changed = True
+
+    if config_changed:
+        config_path.write_text(
+            yaml.safe_dump(raw, allow_unicode=True, default_flow_style=False, sort_keys=False),
+            encoding="utf-8",
+        )
+    if nodeskclaw_changed:
+        print("[entrypoint] 已启用 NoDeskClaw Hermes 插件与 nodeskclaw toolset")
 
 runtime_exports: dict[str, str] = {}
 platforms = raw.get("platforms")

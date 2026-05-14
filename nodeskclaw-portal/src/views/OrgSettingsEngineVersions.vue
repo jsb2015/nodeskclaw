@@ -5,6 +5,9 @@ import { useToast } from '@/composables/useToast'
 import { resolveApiErrorMessage } from '@/i18n/error'
 import api from '@/services/api'
 import { Loader2, Plus, Star, Trash2, Ban, RefreshCw } from 'lucide-vue-next'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -182,7 +185,7 @@ onMounted(async () => {
 
     <div class="flex items-center justify-between">
       <div class="inline-flex rounded-lg border border-border bg-card p-1">
-        <button
+        <Button variant="unstyled" size="unstyled"
           v-for="rt in runtimeOptions"
           :key="rt.runtime_id"
           class="px-3 py-1.5 rounded-md text-sm transition-colors"
@@ -190,23 +193,23 @@ onMounted(async () => {
           @click="selectRuntime(rt.runtime_id)"
         >
           {{ rt.display_name }}
-        </button>
+        </Button>
       </div>
       <div class="flex items-center gap-2">
-        <button
+        <Button variant="unstyled" size="unstyled"
           class="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
           :disabled="loading"
           @click="fetchVersions"
         >
           <RefreshCw class="w-3.5 h-3.5" :class="loading ? 'animate-spin' : ''" />
-        </button>
-        <button
+        </Button>
+        <Button variant="unstyled" size="unstyled"
           class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors"
           @click="openPublishDialog"
         >
           <Plus class="w-4 h-4" />
           {{ t('orgSettings.engineVersionsPublish') }}
-        </button>
+        </Button>
       </div>
     </div>
 
@@ -238,27 +241,27 @@ onMounted(async () => {
           </span>
         </div>
         <div class="flex items-center gap-1.5 shrink-0">
-          <button
+          <Button variant="unstyled" size="unstyled"
             v-if="!v.is_default"
             class="px-2 py-1 rounded text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             @click="setDefault(v.id)"
           >
             {{ t('orgSettings.engineVersionsSetDefault') }}
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled" size="unstyled"
             v-if="!v.is_default"
             class="px-2 py-1 rounded text-xs text-muted-foreground hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950 transition-colors"
             @click="deprecate(v.id)"
           >
             <Ban class="w-3.5 h-3.5" />
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled" size="unstyled"
             v-if="!v.is_default"
             class="px-2 py-1 rounded text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
             @click="remove(v.id)"
           >
             <Trash2 class="w-3.5 h-3.5" />
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -274,32 +277,32 @@ onMounted(async () => {
             <div>
               <label class="text-sm font-medium block mb-1">{{ t('orgSettings.engineVersionsSelectTag') }}</label>
               <div class="relative">
-                <button
+                <Button variant="unstyled" size="unstyled"
                   class="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-border bg-card text-sm text-left hover:border-primary/50 transition-colors"
                   @click="tagDropdownOpen = !tagDropdownOpen"
                 >
                   <span class="font-mono text-xs">{{ publishForm.image_tag || t('engine.selectVersion') }}</span>
                   <RefreshCw v-if="loadingTags" class="w-3.5 h-3.5 animate-spin text-muted-foreground" />
-                </button>
+                </Button>
                 <div
                   v-if="tagDropdownOpen && registryTags.length > 0"
                   class="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto rounded-lg border border-border bg-card shadow-lg"
                 >
-                  <button
+                  <Button variant="unstyled" size="unstyled"
                     v-for="tag in registryTags"
                     :key="tag"
                     class="w-full px-3 py-1.5 text-left text-xs font-mono hover:bg-accent transition-colors"
                     @click="selectTag(tag)"
                   >
                     {{ tag }}
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
 
             <div>
               <label class="text-sm font-medium block mb-1">{{ t('orgSettings.engineVersionsVersion') }}</label>
-              <input
+              <Input
                 v-model="publishForm.version"
                 type="text"
                 class="w-full px-3 py-2 rounded-lg border border-border bg-card text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
@@ -309,7 +312,7 @@ onMounted(async () => {
 
             <div>
               <label class="text-sm font-medium block mb-1">{{ t('orgSettings.engineVersionsReleaseNotes') }}</label>
-              <textarea
+              <Textarea
                 v-model="publishForm.release_notes"
                 rows="3"
                 class="w-full px-3 py-2 rounded-lg border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors resize-none"
@@ -318,20 +321,20 @@ onMounted(async () => {
           </div>
 
           <div class="flex justify-end gap-2 pt-2">
-            <button
+            <Button variant="unstyled" size="unstyled"
               class="px-3 py-1.5 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
               @click="showPublishDialog = false"
             >
               {{ t('common.cancel') }}
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled" size="unstyled"
               class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors disabled:opacity-50"
               :disabled="publishing || !publishForm.version || !publishForm.image_tag"
               @click="handlePublish"
             >
               <Loader2 v-if="publishing" class="w-3.5 h-3.5 animate-spin" />
               {{ t('orgSettings.engineVersionsPublish') }}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

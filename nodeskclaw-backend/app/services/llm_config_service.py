@@ -136,16 +136,19 @@ def _build_providers_config(
 
 def _docker_rewrite_urls(providers: dict) -> dict:
     """Docker 实例使用宿主机可达地址，避免依赖主 compose 网络内的服务名。"""
-    proxy_internal_url = (settings.LLM_PROXY_INTERNAL_URL or "").rstrip("/")
-    proxy_external_url = _docker_rewrite_url((settings.LLM_PROXY_URL or "").rstrip("/"))
     for _provider_id, entry in providers.items():
         base_url = entry.get("baseUrl", "")
         if base_url:
-            if proxy_internal_url and proxy_external_url and base_url.startswith(proxy_internal_url):
-                entry["baseUrl"] = f"{proxy_external_url}{base_url[len(proxy_internal_url):]}"
-            else:
-                entry["baseUrl"] = _docker_rewrite_url(base_url)
+            entry["baseUrl"] = _docker_rewrite_proxy_url(base_url)
     return providers
+
+
+def _docker_rewrite_proxy_url(url: str) -> str:
+    proxy_internal_url = (settings.LLM_PROXY_INTERNAL_URL or "").rstrip("/")
+    proxy_external_url = (settings.LLM_PROXY_URL or "").rstrip("/")
+    if proxy_internal_url and proxy_external_url and url.startswith(proxy_internal_url):
+        url = f"{proxy_external_url}{url[len(proxy_internal_url):]}"
+    return _docker_rewrite_url(url)
 
 
 def _resolve_proxy_url(*, use_external_proxy: bool) -> str:
@@ -332,7 +335,7 @@ async def _build_hermes_provider_payload(
             env_key = HERMES_WP_API_KEY_ENV
 
         if compute_provider == "docker":
-            base_url = _docker_rewrite_url(base_url)
+            base_url = _docker_rewrite_proxy_url(base_url)
 
         provider_name = _hermes_custom_provider_name(cfg.provider)
         selected_models = (

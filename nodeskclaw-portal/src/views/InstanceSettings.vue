@@ -16,6 +16,10 @@ import {
   isCodexProvider, defaultModelForProvider,
 } from '@/utils/llmProviders'
 import { useEdition } from '@/composables/useFeature'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 
 const instanceId = inject<ComputedRef<string>>('instanceId')!
 const instanceRuntime = inject<ComputedRef<string>>('instanceRuntime', computed(() => 'openclaw'))
@@ -460,15 +464,15 @@ watch(() => instanceOrgId.value, (newVal, oldVal) => {
           </span>
         </div>
         <div class="flex items-center gap-2">
-          <button
+          <Button variant="unstyled" size="unstyled"
             class="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border text-xs hover:bg-card transition-colors"
             :disabled="saving || restarting"
             @click="loadAll"
           >
             <RefreshCw class="w-3 h-3" />
             刷新
-          </button>
-          <button
+          </Button>
+          <Button variant="unstyled" size="unstyled"
             v-if="providerConfigs.length > 0 && canEdit"
             :disabled="saving || restarting || !canSave"
             class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-colors"
@@ -480,7 +484,7 @@ watch(() => instanceOrgId.value, (newVal, oldVal) => {
             <Loader2 v-if="saving || restarting" class="w-3 h-3 animate-spin" />
             <Save v-else class="w-3 h-3" />
             {{ restarting ? '重启中...' : saving ? '保存中...' : '保存并重启' }}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -507,7 +511,7 @@ watch(() => instanceOrgId.value, (newVal, oldVal) => {
             当前AI 员工未配置大模型 Provider，选择一个开始配置
           </p>
           <div class="grid grid-cols-2 gap-2">
-            <button
+            <Button variant="unstyled" size="unstyled"
               v-for="p in unusedProviders"
               :key="p"
               class="px-4 py-3 rounded-lg border border-border bg-card text-sm text-left hover:border-primary/50 hover:bg-primary/5 transition-colors cursor-pointer"
@@ -520,8 +524,8 @@ watch(() => instanceOrgId.value, (newVal, oldVal) => {
                   {{ orgKeyLabel }}
                 </span>
               </div>
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled" size="unstyled"
               v-for="ocp in orgCustomProviders"
               :key="ocp.provider"
               class="px-4 py-3 rounded-lg border border-border bg-card text-sm text-left hover:border-primary/50 hover:bg-primary/5 transition-colors cursor-pointer"
@@ -534,8 +538,8 @@ watch(() => instanceOrgId.value, (newVal, oldVal) => {
                   {{ orgKeyLabel }}
                 </span>
               </div>
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled" size="unstyled"
               class="px-4 py-3 rounded-lg border border-dashed border-violet-400/50 bg-card text-sm text-left hover:border-violet-400 hover:bg-violet-500/5 transition-colors text-violet-400 cursor-pointer"
               @click="showCustomForm = true"
             >
@@ -543,7 +547,7 @@ watch(() => instanceOrgId.value, (newVal, oldVal) => {
                 <Plus class="w-3.5 h-3.5" />
                 {{ t('llm.addCustomProvider') }}
               </div>
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -563,12 +567,12 @@ watch(() => instanceOrgId.value, (newVal, oldVal) => {
                   {{ orgKeyLabel }}
                 </span>
               </div>
-              <button
+              <Button variant="unstyled" size="unstyled"
                 class="text-muted-foreground hover:text-destructive transition-colors"
                 @click="removeProvider(idx)"
               >
                 <Trash2 class="w-4 h-4" />
-              </button>
+              </Button>
             </div>
 
             <!-- API type selector (custom only) -->
@@ -577,35 +581,32 @@ watch(() => instanceOrgId.value, (newVal, oldVal) => {
               <template v-if="cfg.keySource === 'org'">
                 <span class="text-xs">{{ cfg.apiType === 'anthropic-messages' ? t('llm.apiTypeAnthropic') : t('llm.apiTypeOpenai') }}</span>
               </template>
-              <template v-else>
+              <RadioGroup v-else v-model="cfg.apiType" class="flex flex-row gap-4" @update:model-value="markDirty">
                 <label class="flex items-center gap-1.5 cursor-pointer text-xs">
-                  <input type="radio" :name="`apitype-${cfg.provider}`" value="openai-completions" v-model="cfg.apiType" class="accent-primary" @change="markDirty" />
+                  <RadioGroupItem value="openai-completions" />
                   {{ t('llm.apiTypeOpenai') }}
                 </label>
                 <label class="flex items-center gap-1.5 cursor-pointer text-xs">
-                  <input type="radio" :name="`apitype-${cfg.provider}`" value="anthropic-messages" v-model="cfg.apiType" class="accent-primary" @change="markDirty" />
+                  <RadioGroupItem value="anthropic-messages" />
                   {{ t('llm.apiTypeAnthropic') }}
                 </label>
-              </template>
+              </RadioGroup>
             </div>
 
             <!-- Key source selection -->
             <div class="space-y-2">
-              <div v-if="(!cfg.isCustom || isOrgKeyAvailable(cfg.provider)) && !isCodexProvider(cfg.provider)" class="flex gap-4 text-sm">
+              <RadioGroup
+                v-if="(!cfg.isCustom || isOrgKeyAvailable(cfg.provider)) && !isCodexProvider(cfg.provider)"
+                v-model="cfg.keySource"
+                class="flex flex-row gap-4 text-sm"
+                @update:model-value="markDirty"
+              >
                 <span class="relative group">
                   <label
                     class="flex items-center gap-1.5"
                     :class="isOrgKeyAvailable(cfg.provider) ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'"
                   >
-                    <input
-                      type="radio"
-                      :name="`ks-${cfg.provider}`"
-                      value="org"
-                      v-model="cfg.keySource"
-                      class="accent-primary"
-                      :disabled="!isOrgKeyAvailable(cfg.provider)"
-                      @change="markDirty"
-                    />
+                    <RadioGroupItem value="org" :disabled="!isOrgKeyAvailable(cfg.provider)" />
                     {{ orgKeyLabel }}
                   </label>
                   <span
@@ -616,17 +617,10 @@ watch(() => instanceOrgId.value, (newVal, oldVal) => {
                   </span>
                 </span>
                 <label class="flex items-center gap-1.5 cursor-pointer">
-                  <input
-                    type="radio"
-                    :name="`ks-${cfg.provider}`"
-                    value="personal"
-                    v-model="cfg.keySource"
-                    class="accent-primary"
-                    @change="markDirty"
-                  />
+                  <RadioGroupItem value="personal" />
                   {{ t('llm.personalKey') }}
                 </label>
-              </div>
+              </RadioGroup>
 
               <p v-else-if="isCodexProvider(cfg.provider)" class="text-xs text-muted-foreground pl-0.5">
                 {{ t('llm.codexCliHint') }}
@@ -657,7 +651,7 @@ watch(() => instanceOrgId.value, (newVal, oldVal) => {
                   <div class="flex items-center gap-2">
                     <div class="relative flex-1">
                       <Key class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                      <input
+                      <Input
                         v-model="cfg.personalKeyNew"
                         type="password"
                         :placeholder="cfg.hasExistingPersonalKey ? '输入新 Key 以替换' : '输入 API Key'"
@@ -665,7 +659,7 @@ watch(() => instanceOrgId.value, (newVal, oldVal) => {
                         @input="markDirty"
                       />
                     </div>
-                    <button
+                    <Button variant="unstyled" size="unstyled"
                       v-if="cfg.personalKeyNew"
                       class="shrink-0 flex items-center gap-1 px-2 py-1.5 rounded-md border border-border text-xs hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       :disabled="testingProvider === idx"
@@ -674,7 +668,7 @@ watch(() => instanceOrgId.value, (newVal, oldVal) => {
                       <Loader2 v-if="testingProvider === idx" class="w-3.5 h-3.5 animate-spin" />
                       <Zap v-else class="w-3.5 h-3.5" />
                       {{ t('llm.testKey') }}
-                    </button>
+                    </Button>
                     <span v-if="testResults[idx]?.ok" class="shrink-0 flex items-center gap-1 text-xs text-green-500">
                       <CheckCircle class="w-3.5 h-3.5" />
                       {{ testResults[idx].tested_model ? t('llm.testConnectionModel', { model: testResults[idx].tested_model }) : t('llm.testKeyAvailable') }}
@@ -698,18 +692,18 @@ watch(() => instanceOrgId.value, (newVal, oldVal) => {
                       @input="markDirty"
                     />
                     <label v-if="cfg.baseUrl" class="flex items-center gap-2 mt-1.5 cursor-pointer">
-                      <input type="checkbox" v-model="cfg.skipSslVerify" class="accent-primary" @change="markDirty" />
+                      <Checkbox v-model:checked="cfg.skipSslVerify" @update:checked="markDirty" />
                       <span class="text-xs">{{ t('orgSettings.llmKeysSkipSslVerify') }}</span>
                       <span class="text-xs text-muted-foreground">{{ t('orgSettings.llmKeysSkipSslVerifyHint') }}</span>
                     </label>
                   </div>
-                  <button
+                  <Button variant="unstyled" size="unstyled"
                     v-if="!cfg.isCustom && !cfg.showBaseUrl"
                     class="text-xs text-muted-foreground hover:text-foreground transition-colors"
                     @click="cfg.showBaseUrl = true"
                   >
                     {{ t('llm.customBaseUrl') }}
-                  </button>
+                  </Button>
                 </template>
               </div>
             </div>
@@ -730,19 +724,19 @@ watch(() => instanceOrgId.value, (newVal, oldVal) => {
           <!-- Add provider -->
           <div class="flex gap-2 items-start">
             <div v-if="unusedProviders.length > 0" class="relative">
-              <button
+              <Button variant="unstyled" size="unstyled"
                 class="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                 @click="newProviderOpen = !newProviderOpen"
               >
                 <Plus class="w-3.5 h-3.5" />
                 添加 Provider
                 <ChevronDown class="w-3 h-3 transition-transform" :class="newProviderOpen ? 'rotate-180' : ''" />
-              </button>
+              </Button>
               <div
                 v-if="newProviderOpen"
                 class="absolute z-10 mt-1 w-56 rounded-lg border border-border bg-card shadow-lg overflow-hidden"
               >
-                <button
+                <Button variant="unstyled" size="unstyled"
                   v-for="p in unusedProviders"
                   :key="p"
                   class="w-full px-4 py-2 text-left text-sm hover:bg-accent transition-colors"
@@ -755,11 +749,11 @@ watch(() => instanceOrgId.value, (newVal, oldVal) => {
                       {{ orgKeyLabel }}
                     </span>
                   </div>
-                </button>
+                </Button>
               </div>
             </div>
             <div v-for="ocp in orgCustomProviders" :key="ocp.provider" class="inline-flex">
-              <button
+              <Button variant="unstyled" size="unstyled"
                 class="flex items-center gap-1.5 text-xs text-foreground hover:text-primary transition-colors cursor-pointer"
                 @click="addOrgCustomProvider(ocp)"
               >
@@ -768,15 +762,15 @@ watch(() => instanceOrgId.value, (newVal, oldVal) => {
                 <span class="inline-flex items-center gap-0.5 text-[10px] text-amber-500">
                   <Star class="w-3 h-3 fill-amber-500 text-amber-500" />
                 </span>
-              </button>
+              </Button>
             </div>
-            <button
+            <Button variant="unstyled" size="unstyled"
               class="flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300 transition-colors cursor-pointer"
               @click="showCustomForm = true"
             >
               <Plus class="w-3.5 h-3.5" />
               {{ t('llm.addCustomProvider') }}
-            </button>
+            </Button>
           </div>
 
         </div>
@@ -785,13 +779,13 @@ watch(() => instanceOrgId.value, (newVal, oldVal) => {
         <div v-if="showCustomForm" class="rounded-lg border border-violet-400/30 bg-violet-500/5 p-4 space-y-3">
           <div class="flex items-center justify-between">
             <span class="font-medium text-sm text-violet-400">{{ t('llm.customProvider') }}</span>
-            <button class="text-muted-foreground hover:text-foreground text-xs" @click="showCustomForm = false; customSlug = ''; customSlugError = ''">
+            <Button variant="unstyled" size="unstyled" class="text-muted-foreground hover:text-foreground text-xs" @click="showCustomForm = false; customSlug = ''; customSlugError = ''">
               {{ t('common.cancel') }}
-            </button>
+            </Button>
           </div>
           <div class="space-y-1.5">
             <label class="text-xs text-muted-foreground">{{ t('llm.providerSlug') }}</label>
-            <input
+            <Input
               v-model="customSlug"
               type="text"
               maxlength="32"
@@ -802,13 +796,13 @@ watch(() => instanceOrgId.value, (newVal, oldVal) => {
             <p v-if="customSlugError" class="text-[10px] text-destructive">{{ customSlugError }}</p>
             <p v-else class="text-[10px] text-muted-foreground">{{ t('llm.providerSlugHint') }}</p>
           </div>
-          <button
+          <Button variant="unstyled" size="unstyled"
             class="px-4 py-1.5 rounded-md bg-violet-500/10 text-violet-400 text-sm hover:bg-violet-500/20 transition-colors"
             :disabled="!customSlug.trim()"
             @click="addCustomProvider"
           >
             {{ t('common.add') }}
-          </button>
+          </Button>
         </div>
 
       </template>

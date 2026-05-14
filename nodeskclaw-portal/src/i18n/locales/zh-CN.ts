@@ -36,6 +36,8 @@ const zhCN = {
     yes: "是",
     no: "否",
     copyFailed: "复制失败，请手动选中复制",
+    localeZhCN: "简体中文",
+    localeEnUS: "English",
   },
   status: {
     running: "运行中",
@@ -178,6 +180,13 @@ const zhCN = {
         efficiencyLabel: '人效提升',
       },
     },
+  },
+  home: {
+    title: "我的 AI 员工",
+    subtitle: "管理你部署的 DeskClaw AI 员工",
+    createInstance: "创建 AI 员工",
+    emptyTitle: "还没有 AI 员工",
+    emptyDescription: "创建第一个 DeskClaw AI 员工后，就可以在赛博办公室中编排协作关系。",
   },
   orgSetup: {
     title: "开通企业空间",
@@ -869,6 +878,14 @@ const zhCN = {
       empty: "暂无技能",
       loadFailed: "加载技能内容失败",
     },
+  },
+  runtimeDefaultCapabilities: {
+    sharedFiles: "黑板 Files",
+    sharedFilesDesc: "可把文件上传到办公室黑板，供其他成员读取",
+    blackboard: "黑板",
+    blackboardDesc: "可读写任务、目标和黑板内容",
+    topology: "拓扑",
+    topologyDesc: "可读取办公室成员和可达关系",
   },
   instanceRuntime: {
     title: "运行状态",
@@ -1619,6 +1636,7 @@ const zhCN = {
     restartFailed: "重启失败",
     delete: "删除 AI 员工",
     deleting: "删除中...",
+    defaultCapabilities: "默认能力",
     installedGenes: "已安装技能基因",
     appliedGenomes: "已应用技能基因组",
     viewAll: "查看全部",
@@ -1672,6 +1690,9 @@ const zhCN = {
       forbidden: "无权限",
       bad_request: "请求参数错误",
       conflict: "资源冲突",
+    },
+    file: {
+      invalid_base64: "文件内容格式错误，请重新上传文件",
     },
     system: {
       internal_error: "服务器内部错误",

@@ -7,6 +7,8 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useToast } from '@/composables/useToast'
 import api from '@/services/api'
 import { resolveApiErrorMessage } from '@/i18n/error'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 interface MissingGene {
   id: string
@@ -223,14 +225,14 @@ async function doAddAgent(instanceId: string, installSlugs: string[]) {
               <h2 class="text-base font-semibold">{{ t('addAgentView.title') }}</h2>
               <p class="text-xs text-muted-foreground mt-0.5">{{ t('addAgentView.subtitle') }}</p>
             </div>
-            <button class="p-1.5 rounded-lg hover:bg-muted transition-colors" @click="close">
+            <Button variant="unstyled" size="unstyled" class="p-1.5 rounded-lg hover:bg-muted transition-colors" @click="close">
               <X class="w-4 h-4 text-muted-foreground" />
-            </button>
+            </Button>
           </div>
 
           <!-- Body -->
           <div class="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-            <button
+            <Button variant="unstyled" size="unstyled"
               class="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-dashed border-primary/40 bg-primary/5 hover:bg-primary/10 transition-colors"
               @click="router.push(`/instances/create?workspace=${workspaceId}${clusterId ? `&cluster=${clusterId}` : ''}`)"
             >
@@ -239,25 +241,25 @@ async function doAddAgent(instanceId: string, installSlugs: string[]) {
                 <p class="text-sm font-medium">{{ t('addAgentView.createNew') }}</p>
                 <p class="text-xs text-muted-foreground">{{ t('addAgentView.createNewDesc') }}</p>
               </div>
-            </button>
+            </Button>
 
             <div class="flex items-center gap-2">
               <div class="relative flex-1">
                 <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <input
+                <Input
                   v-model="search"
                   class="w-full pl-9 pr-3 py-2 rounded-lg bg-muted border border-border text-sm outline-none focus:ring-1 focus:ring-primary/50"
                   :placeholder="t('addAgentView.searchPlaceholder')"
                 />
               </div>
-              <button
+              <Button variant="unstyled" size="unstyled"
                 class="p-2 rounded-lg border border-border hover:bg-muted transition-colors disabled:opacity-50"
                 :disabled="loading"
                 :title="t('addAgentView.refresh')"
                 @click="fetchInstances"
               >
                 <RefreshCw class="w-4 h-4" :class="loading ? 'animate-spin' : ''" />
-              </button>
+              </Button>
             </div>
 
             <div v-if="loading" class="flex justify-center py-10">
@@ -314,7 +316,7 @@ async function doAddAgent(instanceId: string, installSlugs: string[]) {
                     <Loader2 class="w-3 h-3 animate-spin text-muted-foreground" />
                     <span class="text-xs text-muted-foreground">{{ t('addAgentView.stepInstallGenes') }}</span>
                   </div>
-                  <button
+                  <Button variant="unstyled" size="unstyled"
                     v-else
                     class="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 disabled:opacity-50"
                     :disabled="!!adding || geneChecking"
@@ -322,7 +324,7 @@ async function doAddAgent(instanceId: string, installSlugs: string[]) {
                   >
                     <Plus class="w-3 h-3" />
                     {{ t('addAgentView.addBtn') }}
-                  </button>
+                  </Button>
                 </div>
               </div>
 
@@ -399,9 +401,9 @@ async function doAddAgent(instanceId: string, installSlugs: string[]) {
                     {{ t('addAgentView.geneDialogBody', { count: missingGenes.length }) }}
                   </p>
                 </div>
-                <button class="shrink-0 p-1 rounded-md hover:bg-muted transition-colors" @click="closeGeneDialog">
+                <Button variant="unstyled" size="unstyled" class="shrink-0 p-1 rounded-md hover:bg-muted transition-colors" @click="closeGeneDialog">
                   <X class="w-4 h-4 text-muted-foreground" />
-                </button>
+                </Button>
               </div>
 
               <div class="px-5 pb-3 space-y-2 max-h-[240px] overflow-y-auto">
@@ -436,18 +438,18 @@ async function doAddAgent(instanceId: string, installSlugs: string[]) {
               </div>
 
               <div class="flex items-center gap-2 justify-end p-5 pt-3 border-t border-border">
-                <button
+                <Button variant="unstyled" size="unstyled"
                   class="px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-muted transition-colors"
                   @click="closeGeneDialog"
                 >
                   {{ t('addAgentView.geneDialogCancel') }}
-                </button>
-                <button
+                </Button>
+                <Button variant="unstyled" size="unstyled"
                   class="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
                   @click="confirmGeneInstall"
                 >
                   {{ t('addAgentView.geneDialogConfirm') }}
-                </button>
+                </Button>
               </div>
             </div>
           </div>

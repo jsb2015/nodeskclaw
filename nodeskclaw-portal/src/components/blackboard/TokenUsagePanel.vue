@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { Loader2, Coins, ArrowUpRight, ArrowDownLeft } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import api from '@/services/api'
+import { Button } from '@/components/ui/button'
 
 type TokenUnit = 'K' | 'M'
 const UNIT_KEYS = {
@@ -95,13 +96,13 @@ defineExpose({ refresh: loadUsage })
               {{ t('blackboard.promptTokens') }}
             </div>
             <div class="flex rounded border border-border/50 overflow-hidden">
-              <button
+              <Button variant="unstyled" size="unstyled"
                 v-for="u in (['K', 'M'] as const)"
                 :key="u"
                 class="px-1.5 py-0.5 text-[10px] leading-none transition-colors"
                 :class="promptUnit === u ? 'bg-foreground/15 text-foreground font-medium' : 'text-muted-foreground/50'"
                 @click="toggleUnit('prompt', u)"
-              >{{ u }}</button>
+              >{{ u }}</Button>
             </div>
           </div>
           <div class="text-base font-semibold">{{ formatTokens(data.total_prompt_tokens, promptUnit) }}</div>
@@ -113,13 +114,13 @@ defineExpose({ refresh: loadUsage })
               {{ t('blackboard.completionTokens') }}
             </div>
             <div class="flex rounded border border-border/50 overflow-hidden">
-              <button
+              <Button variant="unstyled" size="unstyled"
                 v-for="u in (['K', 'M'] as const)"
                 :key="u"
                 class="px-1.5 py-0.5 text-[10px] leading-none transition-colors"
                 :class="completionUnit === u ? 'bg-foreground/15 text-foreground font-medium' : 'text-muted-foreground/50'"
                 @click="toggleUnit('completion', u)"
-              >{{ u }}</button>
+              >{{ u }}</Button>
             </div>
           </div>
           <div class="text-base font-semibold">{{ formatTokens(data.total_completion_tokens, completionUnit) }}</div>
@@ -128,13 +129,13 @@ defineExpose({ refresh: loadUsage })
           <div class="flex items-center justify-between">
             <div class="text-[11px] text-muted-foreground">{{ t('blackboard.totalTokens') }}</div>
             <div class="flex rounded border border-border/50 overflow-hidden">
-              <button
+              <Button variant="unstyled" size="unstyled"
                 v-for="u in (['K', 'M'] as const)"
                 :key="u"
                 class="px-1.5 py-0.5 text-[10px] leading-none transition-colors"
                 :class="totalUnit === u ? 'bg-foreground/15 text-foreground font-medium' : 'text-muted-foreground/50'"
                 @click="toggleUnit('total', u)"
-              >{{ u }}</button>
+              >{{ u }}</Button>
             </div>
           </div>
           <div class="text-base font-semibold">{{ formatTokens(data.total_tokens, totalUnit) }}</div>

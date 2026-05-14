@@ -1525,21 +1525,26 @@ async def execute_rebuild_pipeline(ctx: _DeployContext) -> None:
             # Namespace + ResourceQuota
             _publish(2, steps[1])
             ns_labels = adapter.get_namespace_labels(ctx.org_id)
-            await k8s.ensure_namespace(ctx.namespace, labels=ns_labels)
-            quota = build_resource_quota(ctx.namespace, ctx.name, ctx.quota_cpu, ctx.quota_mem,
-                                         storage_size=ctx.storage_size if ctx.storage_class else None)
-            await k8s.create_or_skip(quota)
+            await k8s.ensure_namespace(ctx.namespace, extra_labels=ns_labels)
+            quota = build_resource_quota(
+                f"{ctx.namespace}-quota", ctx.namespace,
+                cpu=ctx.quota_cpu, mem=ctx.quota_mem,
+                storage=ctx.storage_size,
+            )
+            await k8s.create_or_skip(k8s.core.create_namespaced_resource_quota, ctx.namespace, quota)
 
             # ConfigMap
             _publish(3, steps[2])
             if ctx.env_vars:
-                cm = build_configmap(ctx.namespace, ctx.name, ctx.env_vars)
-                await k8s.create_or_skip(cm)
+                cm = build_configmap(f"{ctx.name}-config", ctx.namespace, ctx.env_vars, labels)
+                await k8s.create_or_skip(k8s.core.create_namespaced_config_map, ctx.namespace, cm)
 
             # PVC
             _publish(4, steps[3])
-            pvc = build_pvc(ctx.namespace, ctx.name, ctx.storage_class, ctx.storage_size)
-            await k8s.create_or_skip(pvc)
+            pvc_name = f"{ctx.name}-root-data"
+            access_modes = [ctx.pvc_access_mode] if ctx.pvc_access_mode else None
+            pvc = build_pvc(pvc_name, ctx.namespace, ctx.storage_size, ctx.storage_class, labels, access_modes=access_modes)
+            await k8s.create_or_skip(k8s.core.create_namespaced_persistent_volume_claim, ctx.namespace, pvc)
 
             # Deployment
             _publish(5, steps[4])
@@ -1554,38 +1559,62 @@ async def execute_rebuild_pipeline(ctx: _DeployContext) -> None:
             readiness_path = rt_spec.readiness_probe_path if rt_spec else None
 
             from app.services.k8s.resource_builder import build_registry_secret, REGISTRY_SECRET_NAME
-            reg_secret = build_registry_secret(ctx.namespace, image_registry, db_session=None)
-            if reg_secret:
-                await k8s.create_or_skip(reg_secret)
+            registry_username = await get_config("registry_username", db)
+            registry_password = await get_config("registry_password", db)
+            pull_secret_name: str | None = None
+            if registry_username and registry_password and image_registry:
+                reg_secret = build_registry_secret(
+                    ctx.namespace, image_registry, registry_username, registry_password,
+                )
+                await k8s.create_or_skip(k8s.core.create_namespaced_secret, ctx.namespace, reg_secret)
+                pull_secret_name = REGISTRY_SECRET_NAME
             deployment = build_deployment(
-                namespace=ctx.namespace, name=ctx.name, image=image,
+                name=ctx.name, namespace=ctx.namespace, image=image,
                 replicas=ctx.replicas, labels=labels,
+                configmap_name=f"{ctx.name}-config" if ctx.env_vars else None,
+                pvc_name=pvc_name,
                 cpu_request=ctx.cpu_request, cpu_limit=ctx.cpu_limit,
                 mem_request=ctx.mem_request, mem_limit=ctx.mem_limit,
-                has_configmap=bool(ctx.env_vars), storage_size=ctx.storage_size,
-                gateway_port=gw_port, health_probe_path=health_path,
-                readiness_probe_path=readiness_path,
+                port=gw_port,
+                env_vars=ctx.env_vars,
                 advanced_config=ctx.advanced_config,
-                image_pull_secrets=[REGISTRY_SECRET_NAME] if reg_secret else None,
+                image_pull_secret=pull_secret_name,
+                health_probe_path=health_path,
+                readiness_probe_path=readiness_path or health_path,
+                has_init_script=rt_spec.has_init_script if rt_spec else True,
             )
-            await k8s.apply(deployment)
+            await k8s.apply(
+                k8s.apps.create_namespaced_deployment,
+                k8s.apps.patch_namespaced_deployment,
+                ctx.namespace,
+                ctx.name,
+                deployment,
+            )
 
             # Service
             _publish(6, steps[5])
-            svc = build_service(ctx.namespace, ctx.name, gateway_port=gw_port)
-            await k8s.create_or_skip(svc)
+            svc = build_service(ctx.name, ctx.namespace, labels, port=gw_port)
+            await k8s.create_or_skip(k8s.core.create_namespaced_service, ctx.namespace, svc)
 
             # Ingress
             _publish(7, steps[6])
             ingress_base = await get_config("ingress_base_domain", db)
+            subdomain_suffix = await get_config("ingress_subdomain_suffix", db)
             tls_secret = await get_config("tls_secret_name", db)
             has_proxy = bool(ctx.proxy_endpoint)
             tls_secret = adapter.get_tls_secret(tls_secret, has_proxy)
             if ingress_base:
-                ingress_host = f"{ctx.name}.{ingress_base}"
-                ingress = build_ingress(ctx.namespace, ctx.name, ingress_host,
-                                        tls_secret_name=tls_secret, gateway_port=gw_port)
-                await k8s.create_or_skip(ingress)
+                if subdomain_suffix:
+                    ingress_host = f"{ctx.name}-{subdomain_suffix}.{ingress_base}"
+                else:
+                    ingress_host = f"{ctx.name}.{ingress_base}"
+                ingress = build_ingress(
+                    ctx.name, ctx.namespace, ingress_host, labels,
+                    port=gw_port,
+                    tls_secret_name=tls_secret,
+                    ingress_class=cluster.ingress_class,
+                )
+                await k8s.create_or_skip(k8s.networking.create_namespaced_ingress, ctx.namespace, ingress)
                 async with async_session_factory() as db2:
                     inst = (await db2.execute(
                         select(Instance).where(Instance.id == ctx.instance_id)

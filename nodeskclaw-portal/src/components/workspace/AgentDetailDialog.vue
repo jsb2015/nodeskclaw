@@ -11,9 +11,10 @@ import api from '@/services/api'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
 import type { InstanceSkillItem, InstanceGeneItem, GenomeItem } from '@/stores/gene'
-import { getRuntimeCaps } from '@/utils/runtimeCapabilities'
+import { getRuntimeCaps, getRuntimeDefaultCapabilities } from '@/utils/runtimeCapabilities'
 import { copyToClipboard } from '@/utils/clipboard'
 import { formatDate } from '@/utils/localeFormat'
+import { Button } from '@/components/ui/button'
 
 const props = defineProps<{
   visible: boolean
@@ -67,6 +68,7 @@ const skills = ref<InstanceSkillItem[]>([])
 const instanceGenes = ref<InstanceGeneItem[]>([])
 const appliedGenomes = ref<GenomeItem[]>([])
 const genesLoading = ref(false)
+const defaultCapabilities = computed(() => getRuntimeDefaultCapabilities(instance.value?.runtime ?? 'openclaw'))
 
 const geneStatusClass: Record<string, string> = {
   installed: 'bg-green-500/10 text-green-500',
@@ -352,17 +354,17 @@ onUnmounted(stopPolling)
               </template>
             </div>
             <div class="flex items-center gap-1 shrink-0">
-              <button
+              <Button variant="unstyled" size="unstyled"
                 v-if="instance"
                 class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                 @click="openFullPage"
               >
                 <ExternalLink class="w-3.5 h-3.5" />
                 {{ t('agentDetailDialog.openInNewPage') }}
-              </button>
-              <button class="p-1.5 rounded-lg hover:bg-muted transition-colors" @click="close">
+              </Button>
+              <Button variant="unstyled" size="unstyled" class="p-1.5 rounded-lg hover:bg-muted transition-colors" @click="close">
                 <X class="w-4 h-4 text-muted-foreground" />
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -376,10 +378,10 @@ onUnmounted(stopPolling)
             <!-- Error -->
             <div v-else-if="error" class="text-center py-12">
               <p class="text-sm text-red-400">{{ error }}</p>
-              <button
+              <Button variant="unstyled" size="unstyled"
                 class="mt-3 px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
                 @click="fetchDetail"
-              >{{ t('agentDetailDialog.refresh') }}</button>
+              >{{ t('agentDetailDialog.refresh') }}</Button>
             </div>
 
             <template v-else-if="instance">
@@ -392,7 +394,7 @@ onUnmounted(stopPolling)
                       {{ restarting ? t('agentDetailDialog.accessTokenRestartingHint') : t('agentDetailDialog.accessTokenHint') }}
                     </p>
                   </div>
-                  <button
+                  <Button variant="unstyled" size="unstyled"
                     class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     :disabled="restarting || resettingToken"
                     @click="handleResetToken"
@@ -400,18 +402,18 @@ onUnmounted(stopPolling)
                     <Loader2 v-if="resettingToken" class="w-3.5 h-3.5 animate-spin" />
                     <RotateCcw v-else class="w-3.5 h-3.5" />
                     {{ resettingToken ? t('agentDetailDialog.resettingToken') : t('agentDetailDialog.resetToken') }}
-                  </button>
+                  </Button>
                 </div>
                 <div class="flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-background/60 border border-border/50">
                   <span class="flex-1 text-xs font-mono break-all text-foreground/80">{{ maskedGatewayToken }}</span>
-                  <button
+                  <Button variant="unstyled" size="unstyled"
                     class="shrink-0 p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
                     :disabled="!gatewayToken"
                     @click="copyToken"
                   >
                     <Check v-if="tokenCopied" class="w-3 h-3 text-green-400" />
                     <Copy v-else class="w-3 h-3" />
-                  </button>
+                  </Button>
                 </div>
               </div>
 
@@ -456,6 +458,23 @@ onUnmounted(stopPolling)
                 <div class="flex items-center gap-2 text-xs text-amber-400">
                   <Loader2 class="w-3.5 h-3.5 animate-spin" />
                   {{ t('agentDetailDialog.restarting') }}
+                </div>
+              </div>
+
+              <!-- Default Capabilities -->
+              <div v-if="defaultCapabilities.length" class="p-3 rounded-lg border border-border bg-card">
+                <h4 class="text-xs font-medium text-muted-foreground mb-2">{{ t('agentDetailDialog.defaultCapabilities') }}</h4>
+                <div class="space-y-1.5">
+                  <div
+                    v-for="capability in defaultCapabilities"
+                    :key="capability.id"
+                    class="p-2 rounded-md bg-muted/30"
+                  >
+                    <div class="text-xs font-medium">{{ t(capability.labelKey) }}</div>
+                    <div class="text-[10px] text-muted-foreground mt-0.5 leading-relaxed">
+                      {{ t(capability.descriptionKey) }}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -541,14 +560,14 @@ onUnmounted(stopPolling)
 
           <!-- Footer actions -->
           <div v-if="instance" class="flex items-center gap-2 px-5 py-3 border-t border-border shrink-0">
-            <button
+            <Button variant="unstyled" size="unstyled"
               class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs hover:bg-muted transition-colors"
               @click="fetchDetail"
             >
               <RefreshCw class="w-3.5 h-3.5" />
               {{ t('agentDetailDialog.refresh') }}
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled" size="unstyled"
               v-if="(ROLE_LEVEL[instance.my_role ?? ''] ?? 0) >= ROLE_LEVEL.editor"
               class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-500/30 text-amber-400 text-xs hover:bg-amber-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               :disabled="restarting"
@@ -556,8 +575,8 @@ onUnmounted(stopPolling)
             >
               <RotateCcw class="w-3.5 h-3.5" :class="restarting ? 'animate-spin' : ''" />
               {{ restarting ? t('agentDetailDialog.restarting') : t('agentDetailDialog.restart') }}
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled" size="unstyled"
               v-if="(ROLE_LEVEL[instance.my_role ?? ''] ?? 0) >= ROLE_LEVEL.admin && !(instance.workspaces?.length ?? 0)"
               class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-500/30 text-red-400 text-xs hover:bg-red-500/10 transition-colors ml-auto disabled:opacity-50 disabled:cursor-not-allowed"
               :disabled="deleting"
@@ -566,7 +585,7 @@ onUnmounted(stopPolling)
               <Loader2 v-if="deleting" class="w-3.5 h-3.5 animate-spin" />
               <Trash2 v-else class="w-3.5 h-3.5" />
               {{ deleting ? t('agentDetailDialog.deleting') : t('agentDetailDialog.delete') }}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -583,14 +602,14 @@ onUnmounted(stopPolling)
               </div>
               <p class="text-xs text-muted-foreground">{{ t('agentDetailDialog.restartConfirmDesc') }}</p>
               <div class="flex justify-end gap-2 pt-1">
-                <button
+                <Button variant="unstyled" size="unstyled"
                   class="px-3 py-1.5 rounded-lg border border-border text-xs hover:bg-muted transition-colors"
                   @click="showRestartConfirm = false"
-                >{{ t('common.cancel') }}</button>
-                <button
+                >{{ t('common.cancel') }}</Button>
+                <Button variant="unstyled" size="unstyled"
                   class="px-3 py-1.5 rounded-lg bg-amber-500 text-white text-xs font-medium hover:bg-amber-600 transition-colors"
                   @click="handleRestart"
-                >{{ t('common.confirm') }}</button>
+                >{{ t('common.confirm') }}</Button>
               </div>
             </div>
           </div>
@@ -611,14 +630,14 @@ onUnmounted(stopPolling)
                 {{ t('agentDetailDialog.deleteConfirmDesc', { name: instance?.name ?? '' }) }}
               </p>
               <div class="flex justify-end gap-2 pt-1">
-                <button
+                <Button variant="unstyled" size="unstyled"
                   class="px-3 py-1.5 rounded-lg border border-border text-xs hover:bg-muted transition-colors"
                   @click="showDeleteConfirm = false"
-                >{{ t('common.cancel') }}</button>
-                <button
+                >{{ t('common.cancel') }}</Button>
+                <Button variant="unstyled" size="unstyled"
                   class="px-3 py-1.5 rounded-lg bg-red-500 text-white text-xs font-medium hover:bg-red-600 transition-colors"
                   @click="handleDelete"
-                >{{ t('common.confirm') }}</button>
+                >{{ t('common.confirm') }}</Button>
               </div>
             </div>
           </div>

@@ -5,6 +5,10 @@ import { useToast } from '@/composables/useToast'
 import { resolveApiErrorMessage } from '@/i18n/error'
 import api from '@/services/api'
 import { Loader2, Save, Globe, AlertTriangle, Shield, ShieldCheck, ShieldOff } from 'lucide-vue-next'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Switch } from '@/components/ui/switch'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -162,7 +166,7 @@ onMounted(() => {
       <div class="space-y-4">
         <div class="space-y-1.5">
           <label class="text-sm font-medium">{{ t('orgSettings.networkBaseDomain') }}</label>
-          <input
+          <Input
             v-model="form.ingress_base_domain"
             type="text"
             placeholder="example.com"
@@ -173,7 +177,7 @@ onMounted(() => {
 
         <div class="space-y-1.5">
           <label class="text-sm font-medium">{{ t('orgSettings.networkSubdomainSuffix') }}</label>
-          <input
+          <Input
             v-model="form.ingress_subdomain_suffix"
             type="text"
             placeholder="staging"
@@ -184,7 +188,7 @@ onMounted(() => {
 
         <div class="space-y-1.5">
           <label class="text-sm font-medium">{{ t('orgSettings.networkTlsSecretName') }}</label>
-          <input
+          <Input
             v-model="form.tls_secret_name"
             type="text"
             placeholder="wildcard-tls"
@@ -194,18 +198,13 @@ onMounted(() => {
         </div>
 
         <div class="flex items-center gap-2">
-          <input
-            id="enable-https"
-            v-model="form.ingress_tls_enabled"
-            type="checkbox"
-            class="h-4 w-4 rounded border-input"
-          />
+          <Checkbox id="enable-https" v-model:checked="form.ingress_tls_enabled" />
           <label for="enable-https" class="text-sm font-medium">{{ t('orgSettings.networkEnableHttps') }}</label>
           <span class="text-xs text-muted-foreground">{{ t('orgSettings.networkEnableHttpsHint') }}</span>
         </div>
 
         <div class="flex items-center gap-3 pt-2">
-          <button
+          <Button variant="unstyled" size="unstyled"
             :disabled="saving"
             class="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2"
             @click="handleSave"
@@ -213,7 +212,7 @@ onMounted(() => {
             <Loader2 v-if="saving" class="w-4 h-4 animate-spin" />
             <Save v-else class="w-4 h-4" />
             {{ t('orgSettings.networkSave') }}
-          </button>
+          </Button>
         </div>
 
         <div v-if="previewUrl" class="text-xs text-muted-foreground bg-muted/30 rounded-lg p-3">
@@ -247,15 +246,7 @@ onMounted(() => {
           </div>
           <label class="relative inline-flex items-center gap-2">
             <span class="text-xs text-muted-foreground">{{ t('orgSettings.npIngressEnabled') }}</span>
-            <div class="relative">
-              <input
-                v-model="ingressEnabled"
-                type="checkbox"
-                class="sr-only peer"
-              />
-              <div class="w-9 h-5 bg-muted rounded-full peer-checked:bg-primary transition-colors" />
-              <div class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-4" />
-            </div>
+            <Switch v-model:checked="ingressEnabled" />
           </label>
         </div>
 
@@ -263,7 +254,7 @@ onMounted(() => {
 
         <div class="space-y-1.5" :class="{ 'opacity-50 pointer-events-none': !ingressEnabled }">
           <label class="text-sm font-medium">{{ t('orgSettings.npIngressAllowCidrs') }}</label>
-          <input
+          <Input
             v-model="ingressForm.ingress_allow_cidrs"
             type="text"
             placeholder="10.200.0.0/16,192.168.50.0/24"
@@ -274,7 +265,7 @@ onMounted(() => {
         </div>
 
         <div class="flex items-center gap-3 pt-1" :class="{ 'opacity-50 pointer-events-none': !ingressEnabled }">
-          <button
+          <Button variant="unstyled" size="unstyled"
             :disabled="savingIngress || !ingressEnabled"
             class="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2"
             @click="handleSaveIngress"
@@ -282,7 +273,7 @@ onMounted(() => {
             <Loader2 v-if="savingIngress" class="w-4 h-4 animate-spin" />
             <Save v-else class="w-4 h-4" />
             {{ t('orgSettings.npIngressSave') }}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -296,15 +287,7 @@ onMounted(() => {
           </div>
           <label class="relative inline-flex items-center gap-2">
             <span class="text-xs text-muted-foreground">{{ t('orgSettings.npEgressEnabled') }}</span>
-            <div class="relative">
-              <input
-                v-model="egressEnabled"
-                type="checkbox"
-                class="sr-only peer"
-              />
-              <div class="w-9 h-5 bg-muted rounded-full peer-checked:bg-primary transition-colors" />
-              <div class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-4" />
-            </div>
+            <Switch v-model:checked="egressEnabled" />
           </label>
         </div>
 
@@ -313,7 +296,7 @@ onMounted(() => {
         <div class="space-y-4" :class="{ 'opacity-50 pointer-events-none': !egressEnabled }">
           <div class="space-y-1.5">
             <label class="text-sm font-medium">{{ t('orgSettings.npDenyCidrs') }}</label>
-            <input
+            <Input
               v-model="egressForm.egress_deny_cidrs"
               type="text"
               placeholder="10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
@@ -325,7 +308,7 @@ onMounted(() => {
 
           <div class="space-y-1.5">
             <label class="text-sm font-medium">{{ t('orgSettings.npAllowPorts') }}</label>
-            <input
+            <Input
               v-model="egressForm.egress_allow_ports"
               type="text"
               placeholder="80,443"
@@ -336,7 +319,7 @@ onMounted(() => {
           </div>
 
           <div class="flex items-center gap-3 pt-1">
-            <button
+            <Button variant="unstyled" size="unstyled"
               :disabled="savingEgress || !egressEnabled"
               class="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2"
               @click="handleSaveEgress"
@@ -344,7 +327,7 @@ onMounted(() => {
               <Loader2 v-if="savingEgress" class="w-4 h-4 animate-spin" />
               <Save v-else class="w-4 h-4" />
               {{ t('orgSettings.npSave') }}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

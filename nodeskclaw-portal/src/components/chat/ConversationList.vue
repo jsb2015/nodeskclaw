@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 import type { Conversation } from '@/stores/workspace'
 import { MessageSquare, Crown } from 'lucide-vue-next'
 import { formatTime } from '@/utils/localeFormat'
+import { Button } from '@/components/ui/button'
 
 const props = defineProps<{
   workspaceId: string
@@ -43,7 +44,7 @@ function formatRelativeTime(dateStr: string | null): string {
       {{ t('workspaceView.conversationEmpty') }}
     </div>
     <div v-else class="overflow-y-auto max-h-[200px]">
-      <button
+      <Button variant="unstyled" size="unstyled"
         v-for="conv in conversations"
         :key="conv.id"
         class="w-full flex items-start gap-2 px-3 py-2 text-left transition-colors border-b border-border/50 last:border-b-0"
@@ -67,7 +68,7 @@ function formatRelativeTime(dateStr: string | null): string {
             {{ conv.last_message_preview || t('workspaceView.conversationNoMessages') }}
           </div>
         </div>
-      </button>
+      </Button>
     </div>
   </div>
 </template>

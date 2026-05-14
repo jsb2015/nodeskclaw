@@ -9,6 +9,8 @@ import { resolveApiErrorMessage } from '@/i18n/error'
 import { useToast } from '@/composables/useToast'
 import CustomSelect from '@/components/shared/CustomSelect.vue'
 import Workspace2D from '@/components/hex2d/Workspace2D.vue'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
   buildTopoNodes,
   buildTopoEdges,
@@ -364,9 +366,9 @@ watch(
         <div class="bg-card rounded-xl shadow-2xl w-full max-w-md border border-border max-h-[90vh] flex flex-col">
           <div class="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
             <h3 class="text-sm font-semibold">{{ t('deployFromTemplate.title') }}</h3>
-            <button type="button" class="p-1 rounded hover:bg-muted" @click="close">
+            <Button variant="unstyled" size="unstyled" type="button" class="p-1 rounded hover:bg-muted" @click="close">
               <X class="w-4 h-4" />
-            </button>
+            </Button>
           </div>
 
           <div v-if="loadingDetail" class="flex justify-center py-12">
@@ -376,7 +378,7 @@ watch(
           <div v-else-if="phase === 'form' && templateDetail" class="px-5 py-4 space-y-4 overflow-y-auto">
             <div class="space-y-1">
               <label class="text-xs font-medium text-muted-foreground">{{ t('deployFromTemplate.workspaceName') }}</label>
-              <input
+              <Input
                 v-model="workspaceName"
                 class="w-full px-3 py-2 text-sm rounded-lg bg-muted border border-border outline-none focus:ring-1 focus:ring-primary/50"
                 maxlength="128"
@@ -437,10 +439,10 @@ watch(
             </div>
 
             <div class="flex justify-end gap-2 pt-2">
-              <button type="button" class="px-4 py-2 text-sm rounded-lg hover:bg-muted" @click="close">
+              <Button variant="unstyled" size="unstyled" type="button" class="px-4 py-2 text-sm rounded-lg hover:bg-muted" @click="close">
                 {{ t('deployFromTemplate.cancel') }}
-              </button>
-              <button
+              </Button>
+              <Button variant="unstyled" size="unstyled"
                 type="button"
                 class="px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground disabled:opacity-50"
                 :disabled="submitting || !workspaceName.trim() || !clusterId || deploySelectedCount === 0"
@@ -448,7 +450,7 @@ watch(
               >
                 <Loader2 v-if="submitting" class="w-4 h-4 animate-spin inline mr-1" />
                 {{ t('deployFromTemplate.startWithCount', { n: deploySelectedCount }) }}
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -491,14 +493,14 @@ watch(
               {{ overallMessage }}
             </p>
 
-            <button
+            <Button variant="unstyled" size="unstyled"
               v-if="finalStatus && finalStatus !== 'failed' && workspaceIdRef"
               type="button"
               class="w-full px-4 py-2.5 text-sm rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
               @click="enterWorkspace"
             >
               {{ t('deployFromTemplate.enterWorkspace') }}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -512,9 +514,9 @@ watch(
         <div class="bg-card rounded-xl shadow-2xl w-full max-w-sm border border-border max-h-[80vh] flex flex-col">
           <div class="flex items-center justify-between px-5 py-3 border-b border-border shrink-0">
             <h3 class="text-sm font-semibold">{{ (selectedSpec.display_name as string) || '—' }}</h3>
-            <button type="button" class="p-1 rounded hover:bg-muted" @click="closeSpecDetail">
+            <Button variant="unstyled" size="unstyled" type="button" class="p-1 rounded hover:bg-muted" @click="closeSpecDetail">
               <X class="w-4 h-4" />
-            </button>
+            </Button>
           </div>
           <div class="px-5 py-4 space-y-4 overflow-y-auto text-xs">
             <div class="space-y-1.5">

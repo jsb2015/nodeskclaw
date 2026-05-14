@@ -7,6 +7,8 @@ import { useToast } from '@/composables/useToast'
 import { useEdition, useFeature } from '@/composables/useFeature'
 import { resolveApiErrorMessage } from '@/i18n/error'
 import { Pencil, Check, X, Loader2, Box, Cpu, HardDrive, Database, Server, GitBranch } from 'lucide-vue-next'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 const { t } = useI18n()
 const orgStore = useOrgStore()
@@ -182,37 +184,37 @@ onMounted(async () => {
         <div class="flex items-center gap-2">
           <template v-if="!editing">
             <span class="font-medium">{{ orgStore.currentOrg.name }}</span>
-            <button
+            <Button variant="unstyled" size="unstyled"
               class="p-1 rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
               :title="t('orgSettings.editName')"
               @click="startEdit"
             >
               <Pencil class="w-3.5 h-3.5" />
-            </button>
+            </Button>
           </template>
           <template v-else>
-            <input
+            <Input
               v-model="editName"
               type="text"
               class="h-8 px-2 rounded-md border border-border bg-background text-sm w-60 focus:outline-none focus:ring-1 focus:ring-primary"
               @keyup.enter="saveName"
               @keyup.escape="cancelEdit"
             />
-            <button
+            <Button variant="unstyled" size="unstyled"
               class="p-1 rounded hover:bg-primary/10 text-primary transition-colors"
               :disabled="saving"
               @click="saveName"
             >
               <Loader2 v-if="saving" class="w-4 h-4 animate-spin" />
               <Check v-else class="w-4 h-4" />
-            </button>
-            <button
+            </Button>
+            <Button variant="unstyled" size="unstyled"
               class="p-1 rounded hover:bg-muted/60 text-muted-foreground transition-colors"
               :disabled="saving"
               @click="cancelEdit"
             >
               <X class="w-4 h-4" />
-            </button>
+            </Button>
           </template>
         </div>
 
@@ -257,21 +259,21 @@ onMounted(async () => {
         <div class="grid grid-cols-[140px_1fr] gap-y-3 items-start text-sm">
           <span class="text-muted-foreground pt-1.5">{{ t('orgSettings.collaborationDepthLabel') }}</span>
           <div class="flex items-center gap-3">
-            <input
+            <Input
               v-model.number="editDepth"
               type="number"
               min="1"
               max="10"
               class="h-8 w-20 px-2 rounded-md border border-border bg-background text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary"
             />
-            <button
+            <Button variant="unstyled" size="unstyled"
               class="h-8 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
               :disabled="savingDepth || editDepth < 1 || editDepth > 10 || editDepth === orgStore.currentOrg?.max_collaboration_depth"
               @click="saveCollaborationDepth"
             >
               <Loader2 v-if="savingDepth" class="w-4 h-4 animate-spin" />
               <template v-else>{{ t('orgSettings.collaborationDepthSave') }}</template>
-            </button>
+            </Button>
           </div>
         </div>
         <p class="text-xs text-muted-foreground/70">{{ t('orgSettings.collaborationDepthDesc') }}</p>

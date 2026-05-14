@@ -18,6 +18,7 @@ import type { EvolutionEventItem } from '@/stores/gene'
 import { getRuntimeCaps } from '@/utils/runtimeCapabilities'
 import { useI18n } from 'vue-i18n'
 import { formatDateTime } from '@/utils/localeFormat'
+import { Button } from '@/components/ui/button'
 
 const { t, locale } = useI18n()
 const instanceId = inject<ComputedRef<string>>('instanceId')!
@@ -151,13 +152,13 @@ onMounted(loadEvents)
           </div>
 
           <div v-if="hasExpandableDetails(ev)" class="mt-2">
-            <button
+            <Button variant="unstyled" size="unstyled"
               class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
               @click="toggleExpand(ev.id)"
             >
               <component :is="expandedIds.has(ev.id) ? ChevronUp : ChevronDown" class="w-3 h-3" />
               {{ expandedIds.has(ev.id) ? '收起' : '查看详情' }}
-            </button>
+            </Button>
             <div v-if="expandedIds.has(ev.id)" class="mt-2 p-3 rounded-lg bg-muted/30 border border-border text-sm text-muted-foreground whitespace-pre-wrap">
               {{ ev.details?.forgetting_summary || ev.details?.simplified_reason || ev.details?.reason }}
             </div>
@@ -167,14 +168,14 @@ onMounted(loadEvents)
     </div>
 
     <div v-if="hasMore && !loading" class="text-center">
-      <button
+      <Button variant="unstyled" size="unstyled"
         class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm border border-border hover:bg-muted/50 transition-colors"
         :disabled="loadingMore"
         @click="loadMore"
       >
         <Loader2 v-if="loadingMore" class="w-4 h-4 animate-spin" />
         加载更多
-      </button>
+      </Button>
     </div>
     </template>
   </div>

@@ -7,6 +7,8 @@ import api from '@/services/api'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
 import { formatDateTime } from '@/utils/localeFormat'
+import { Button } from '@/components/ui/button'
+import { Table, TableHeader, TableBody, TableFooter, TableRow, TableHead, TableCell, TableCaption } from '@/components/ui/table'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -184,13 +186,13 @@ onUnmounted(() => {
     <div class="flex items-center justify-between">
       <h2 class="text-lg font-semibold">{{ t('backup.title') }}</h2>
       <div class="flex gap-2">
-        <button
+        <Button variant="unstyled" size="unstyled"
           class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm hover:bg-card transition-colors"
           @click="fetchBackups"
         >
           <RefreshCw class="w-4 h-4" :class="polling ? 'animate-spin' : ''" />
-        </button>
-        <button
+        </Button>
+        <Button variant="unstyled" size="unstyled"
           class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors disabled:opacity-50"
           :disabled="creating"
           @click="handleCreate"
@@ -198,7 +200,7 @@ onUnmounted(() => {
           <Loader2 v-if="creating" class="w-4 h-4 animate-spin" />
           <Plus v-else class="w-4 h-4" />
           {{ t('backup.create') }}
-        </button>
+        </Button>
       </div>
     </div>
 
@@ -212,25 +214,25 @@ onUnmounted(() => {
     </div>
 
     <div v-else class="border border-border rounded-lg overflow-hidden">
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="border-b border-border bg-muted/30">
-            <th class="text-left px-4 py-2.5 font-medium">{{ t('backup.createdAt') }}</th>
-            <th class="text-left px-4 py-2.5 font-medium">{{ t('backup.size') }}</th>
-            <th class="text-left px-4 py-2.5 font-medium">{{ t('backup.duration') }}</th>
-            <th class="text-left px-4 py-2.5 font-medium">{{ t('backup.status') }}</th>
-            <th class="text-right px-4 py-2.5 font-medium"></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
+      <Table class="w-full text-sm">
+        <TableHeader>
+          <TableRow class="border-b border-border bg-muted/30">
+            <TableHead class="text-left px-4 py-2.5 font-medium">{{ t('backup.createdAt') }}</TableHead>
+            <TableHead class="text-left px-4 py-2.5 font-medium">{{ t('backup.size') }}</TableHead>
+            <TableHead class="text-left px-4 py-2.5 font-medium">{{ t('backup.duration') }}</TableHead>
+            <TableHead class="text-left px-4 py-2.5 font-medium">{{ t('backup.status') }}</TableHead>
+            <TableHead class="text-right px-4 py-2.5 font-medium"></TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow
             v-for="b in backups" :key="b.id"
             class="border-b border-border last:border-0 hover:bg-muted/20"
           >
-            <td class="px-4 py-2.5">{{ formatTime(b.created_at) }}</td>
-            <td class="px-4 py-2.5">{{ formatSize(b.data_size) }}</td>
-            <td class="px-4 py-2.5">{{ formatDuration(b.created_at, b.completed_at) }}</td>
-            <td class="px-4 py-2.5">
+            <TableCell class="px-4 py-2.5">{{ formatTime(b.created_at) }}</TableCell>
+            <TableCell class="px-4 py-2.5">{{ formatSize(b.data_size) }}</TableCell>
+            <TableCell class="px-4 py-2.5">{{ formatDuration(b.created_at, b.completed_at) }}</TableCell>
+            <TableCell class="px-4 py-2.5">
               <span
                 class="inline-flex items-center gap-1"
                 :class="{
@@ -243,28 +245,28 @@ onUnmounted(() => {
                 {{ statusLabel(b.status) }}
               </span>
               <span v-if="b.message && b.status === 'failed'" class="ml-2 text-muted-foreground text-xs">{{ b.message }}</span>
-            </td>
-            <td class="px-4 py-2.5 text-right">
+            </TableCell>
+            <TableCell class="px-4 py-2.5 text-right">
               <div class="flex items-center justify-end gap-2">
-                <button
+                <Button variant="unstyled" size="unstyled"
                   v-if="b.status === 'completed'"
                   class="flex items-center gap-1 px-2.5 py-1 rounded border border-border text-xs hover:bg-card transition-colors"
                   @click="handleRestore(b.id)"
                 >
                   <RotateCcw class="w-3.5 h-3.5" />
                   {{ t('backup.restore') }}
-                </button>
-                <button
+                </Button>
+                <Button variant="unstyled" size="unstyled"
                   class="flex items-center gap-1 px-2.5 py-1 rounded border border-red-500/30 text-red-400 text-xs hover:bg-red-500/10 transition-colors"
                   @click="handleDelete(b.id)"
                 >
                   <Trash2 class="w-3.5 h-3.5" />
-                </button>
+                </Button>
               </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
     </div>
   </div>
 </template>

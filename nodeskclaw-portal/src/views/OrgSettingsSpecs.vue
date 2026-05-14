@@ -5,6 +5,8 @@ import { useToast } from '@/composables/useToast'
 import { resolveApiErrorMessage } from '@/i18n/error'
 import api from '@/services/api'
 import { Loader2, Save, RotateCcw } from 'lucide-vue-next'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -100,7 +102,7 @@ onMounted(() => {
           <div class="grid grid-cols-2 gap-4">
             <div class="space-y-1.5">
               <label class="text-xs font-medium text-muted-foreground">{{ t('orgSettings.specsLabel') }}</label>
-              <input
+              <Input
                 v-model="preset.label"
                 type="text"
                 class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
@@ -108,7 +110,7 @@ onMounted(() => {
             </div>
             <div class="space-y-1.5">
               <label class="text-xs font-medium text-muted-foreground">{{ t('orgSettings.specsDescLabel') }}</label>
-              <input
+              <Input
                 v-model="preset.desc"
                 type="text"
                 class="w-full h-9 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
@@ -118,7 +120,7 @@ onMounted(() => {
           <div class="grid grid-cols-3 gap-4">
             <div class="space-y-1.5">
               <label class="text-xs font-medium text-muted-foreground">{{ t('orgSettings.specsCpu') }}</label>
-              <input
+              <Input
                 v-model.number="preset.cpu"
                 type="number"
                 min="0.25"
@@ -128,7 +130,7 @@ onMounted(() => {
             </div>
             <div class="space-y-1.5">
               <label class="text-xs font-medium text-muted-foreground">{{ t('orgSettings.specsMemory') }}</label>
-              <input
+              <Input
                 v-model.number="preset.memory"
                 type="number"
                 min="0.5"
@@ -138,7 +140,7 @@ onMounted(() => {
             </div>
             <div class="space-y-1.5">
               <label class="text-xs font-medium text-muted-foreground">{{ t('orgSettings.specsStorage') }}</label>
-              <input
+              <Input
                 v-model.number="preset.storage"
                 type="number"
                 min="20"
@@ -151,7 +153,7 @@ onMounted(() => {
       </div>
 
       <div class="flex items-center gap-3">
-        <button
+        <Button variant="unstyled" size="unstyled"
           :disabled="saving"
           class="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2"
           @click="handleSave"
@@ -159,14 +161,14 @@ onMounted(() => {
           <Loader2 v-if="saving" class="w-4 h-4 animate-spin" />
           <Save v-else class="w-4 h-4" />
           {{ t('common.save') }}
-        </button>
-        <button
+        </Button>
+        <Button variant="unstyled" size="unstyled"
           class="h-9 px-4 rounded-md border border-input text-sm font-medium hover:bg-accent flex items-center gap-2"
           @click="restoreDefaults"
         >
           <RotateCcw class="w-4 h-4" />
           {{ t('orgSettings.specsRestoreDefault') }}
-        </button>
+        </Button>
       </div>
     </template>
   </div>

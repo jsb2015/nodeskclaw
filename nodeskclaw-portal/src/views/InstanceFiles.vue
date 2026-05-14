@@ -9,6 +9,10 @@ import api from '@/services/api'
 import { resolveApiErrorMessage } from '@/i18n/error'
 import { useToast } from '@/composables/useToast'
 import { getRuntimeCaps } from '@/utils/runtimeCapabilities'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
+import { Table, TableHeader, TableBody, TableFooter, TableRow, TableHead, TableCell, TableCaption } from '@/components/ui/table'
+import { Input } from '@/components/ui/input'
 
 interface FileItem {
   name: string
@@ -255,13 +259,13 @@ onMounted(fetchFiles)
       <template v-if="listing">
         <template v-for="(part, idx) in listing.breadcrumb" :key="idx">
           <ChevronRight v-if="idx > 0" class="w-3 h-3 text-muted-foreground shrink-0" />
-          <button
+          <Button variant="unstyled" size="unstyled"
             v-if="idx < listing.breadcrumb.length - 1"
             class="text-muted-foreground hover:text-foreground transition-colors"
             @click="handleBreadcrumb(idx)"
           >
             {{ breadcrumbLabel(part) }}
-          </button>
+          </Button>
           <span v-else class="text-foreground font-medium">{{ breadcrumbLabel(part) }}</span>
         </template>
       </template>
@@ -271,7 +275,7 @@ onMounted(fetchFiles)
     <div v-if="!loading && !error && listing" class="mb-4">
       <div class="relative max-w-xs">
         <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <input
+        <Input
           v-model="filterText"
           :placeholder="t('instanceFiles.filterPlaceholder')"
           class="w-full pl-9 pr-3 py-2 rounded-lg border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
@@ -288,12 +292,12 @@ onMounted(fetchFiles)
     <!-- Error -->
     <div v-else-if="error" class="text-center py-20 space-y-4">
       <p class="text-sm text-red-400">{{ error }}</p>
-      <button
+      <Button variant="unstyled" size="unstyled"
         class="px-4 py-2 rounded-lg border border-border text-sm hover:bg-accent transition-colors"
         @click="fetchFiles"
       >
         {{ t('instanceList.retry') }}
-      </button>
+      </Button>
     </div>
 
     <!-- Empty -->
@@ -306,30 +310,30 @@ onMounted(fetchFiles)
 
     <!-- File table -->
     <div v-else-if="listing" class="rounded-xl border border-border overflow-hidden">
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="border-b border-border bg-card/60">
-            <th class="text-left px-4 py-3 font-medium text-muted-foreground">
+      <Table class="w-full text-sm">
+        <TableHeader>
+          <TableRow class="border-b border-border bg-card/60">
+            <TableHead class="text-left px-4 py-3 font-medium text-muted-foreground">
               {{ t('instanceFiles.fileName') }}
-            </th>
-            <th class="text-left px-4 py-3 font-medium text-muted-foreground w-24">
+            </TableHead>
+            <TableHead class="text-left px-4 py-3 font-medium text-muted-foreground w-24">
               {{ t('instanceFiles.fileSize') }}
-            </th>
-            <th class="text-left px-4 py-3 font-medium text-muted-foreground w-44">
+            </TableHead>
+            <TableHead class="text-left px-4 py-3 font-medium text-muted-foreground w-44">
               {{ t('instanceFiles.fileModified') }}
-            </th>
-            <th class="w-20" />
-          </tr>
-        </thead>
-        <tbody>
-          <tr
+            </TableHead>
+            <TableHead class="w-20" />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow
             v-for="item in filteredItems"
             :key="item.name"
             class="border-b border-border last:border-b-0 hover:bg-accent/50 transition-colors"
             :class="item.is_dir || isPreviewable(item) ? 'cursor-pointer' : ''"
             @click="handleItemClick(item)"
           >
-            <td class="px-4 py-3">
+            <TableCell class="px-4 py-3">
               <div class="flex items-center gap-2">
                 <component
                   :is="getFileIcon(item)"
@@ -340,26 +344,26 @@ onMounted(fetchFiles)
                   {{ item.name }}
                 </span>
               </div>
-            </td>
-            <td class="px-4 py-3 text-muted-foreground tabular-nums">
+            </TableCell>
+            <TableCell class="px-4 py-3 text-muted-foreground tabular-nums">
               {{ item.is_dir ? '-' : formatSize(item.size) }}
-            </td>
-            <td class="px-4 py-3 text-muted-foreground">
+            </TableCell>
+            <TableCell class="px-4 py-3 text-muted-foreground">
               {{ formatTime(item.modified_at) }}
-            </td>
-            <td class="px-4 py-3 text-right">
-              <button
+            </TableCell>
+            <TableCell class="px-4 py-3 text-right">
+              <Button variant="unstyled" size="unstyled"
                 v-if="!item.is_dir"
                 class="p-1 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
                 :title="t('instanceFiles.download')"
                 @click.stop="downloadFile(item)"
               >
                 <Download class="w-4 h-4" />
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+              </Button>
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
     </div>
 
     <!-- Side panel (preview + edit) -->
@@ -381,11 +385,11 @@ onMounted(fetchFiles)
             <div class="flex items-center gap-1 shrink-0">
               <template v-if="!panelLoading && !panelTruncated && !panelBinary && !panelError">
                 <template v-if="editing">
-                  <button
+                  <Button variant="unstyled" size="unstyled"
                     class="px-3 py-1.5 rounded-lg text-xs border border-border hover:bg-accent transition-colors"
                     @click="cancelEdit"
-                  >{{ t('instanceFiles.cancelEdit') }}</button>
-                  <button
+                  >{{ t('instanceFiles.cancelEdit') }}</Button>
+                  <Button variant="unstyled" size="unstyled"
                     class="px-3 py-1.5 rounded-lg text-xs bg-primary text-primary-foreground hover:bg-primary/90 transition-colors flex items-center gap-1 disabled:opacity-50"
                     :disabled="!hasUnsavedChanges || saving"
                     @click="requestSave"
@@ -393,23 +397,23 @@ onMounted(fetchFiles)
                     <Loader2 v-if="saving" class="w-3 h-3 animate-spin" />
                     <Save v-else class="w-3 h-3" />
                     {{ t('instanceFiles.save') }}
-                  </button>
+                  </Button>
                 </template>
-                <button
+                <Button variant="unstyled" size="unstyled"
                   v-else
                   class="px-3 py-1.5 rounded-lg text-xs border border-border hover:bg-accent transition-colors flex items-center gap-1"
                   @click="startEdit"
                 >
                   <Pencil class="w-3 h-3" />
                   {{ t('instanceFiles.edit') }}
-                </button>
+                </Button>
               </template>
-              <button
+              <Button variant="unstyled" size="unstyled"
                 class="p-1 rounded hover:bg-accent transition-colors ml-1"
                 @click="closePanel"
               >
                 <X class="w-4 h-4" />
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -425,7 +429,7 @@ onMounted(fetchFiles)
             <div v-else-if="panelBinary" class="text-sm text-muted-foreground">
               {{ t('instanceFiles.binaryFile') }}
             </div>
-            <textarea
+            <Textarea
               v-else-if="editing"
               v-model="panelContent"
               class="w-full h-full min-h-[60vh] text-xs leading-relaxed font-mono whitespace-pre bg-transparent text-foreground resize-none focus:outline-none"
@@ -457,14 +461,14 @@ onMounted(fetchFiles)
               {{ t('instanceFiles.confirmMessage', { path: panelFilePath }) }}
             </p>
             <div class="flex justify-end gap-2 mt-6">
-              <button
+              <Button variant="unstyled" size="unstyled"
                 class="px-4 py-2 rounded-lg text-sm border border-border hover:bg-accent transition-colors"
                 @click="cancelConfirm"
-              >{{ t('common.cancel') }}</button>
-              <button
+              >{{ t('common.cancel') }}</Button>
+              <Button variant="unstyled" size="unstyled"
                 class="px-4 py-2 rounded-lg text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
                 @click="confirmSave"
-              >{{ t('instanceFiles.confirmSave') }}</button>
+              >{{ t('instanceFiles.confirmSave') }}</Button>
             </div>
           </div>
         </div>

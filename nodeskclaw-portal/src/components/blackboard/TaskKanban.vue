@@ -3,6 +3,8 @@ import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { AlertCircle, CheckCircle2, Clock, DollarSign, Loader2, Play, XCircle } from 'lucide-vue-next'
 import { useWorkspaceStore, type TaskInfo } from '@/stores/workspace'
 import { useI18n } from 'vue-i18n'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 type ActiveTaskStatus = 'pending' | 'in_progress' | 'done' | 'blocked' | 'failed'
 type TaskBucketKey = ActiveTaskStatus
@@ -318,7 +320,7 @@ defineExpose({ refresh: refreshAllBuckets })
 
                 <div v-if="isValueEditable(col.key, task)" class="flex items-center gap-2 pt-1">
                   <template v-if="editingValueTaskId === task.id">
-                    <input
+                    <Input
                       v-model.number="valueInput"
                       type="number"
                       step="0.1"
@@ -328,21 +330,21 @@ defineExpose({ refresh: refreshAllBuckets })
                       @keyup.enter="saveValue(task.id)"
                       @keyup.escape="editingValueTaskId = null"
                     />
-                    <button
+                    <Button variant="unstyled" size="unstyled"
                       class="text-[11px] text-green-400 transition-colors hover:text-green-300"
                       @click="saveValue(task.id)"
                     >
                       {{ t('blackboard.save') }}
-                    </button>
+                    </Button>
                   </template>
-                  <button
+                  <Button variant="unstyled" size="unstyled"
                     v-else
                     class="flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
                     @click="startValueEdit(task)"
                   >
                     <DollarSign class="h-3 w-3" />
                     {{ t('blackboard.annotateValue') }}
-                  </button>
+                  </Button>
                 </div>
               </div>
             </template>

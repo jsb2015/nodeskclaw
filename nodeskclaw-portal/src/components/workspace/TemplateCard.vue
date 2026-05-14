@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { FilePlus2, Code2, PenTool, Microscope, LayoutTemplate, Building2, Trash2 } from 'lucide-vue-next'
 import type { WorkspaceTemplateItem } from '@/stores/workspace'
+import { Button } from '@/components/ui/button'
 
 const props = defineProps<{
   template?: WorkspaceTemplateItem
@@ -45,7 +46,7 @@ const humanCount = computed(() => {
 </script>
 
 <template>
-  <button
+  <Button variant="unstyled" size="unstyled"
     class="group relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all text-center min-h-[120px] justify-center"
     :class="[
       selected
@@ -54,13 +55,13 @@ const humanCount = computed(() => {
     ]"
     @click="$emit('select')"
   >
-    <button
+    <Button variant="unstyled" size="unstyled"
       v-if="deletable"
       class="absolute top-1.5 left-1.5 p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all z-10"
       @click.stop="$emit('delete')"
     >
       <Trash2 class="w-3.5 h-3.5" />
-    </button>
+    </Button>
     <component :is="iconComponent" class="w-7 h-7 text-muted-foreground group-hover:text-primary transition-colors" :class="{ 'text-primary': selected }" />
     <span class="text-sm font-medium leading-tight">
       {{ blank ? $t('createWorkspace.blankTemplate') : template?.name }}
@@ -77,5 +78,5 @@ const humanCount = computed(() => {
     >
       {{ $t('createWorkspace.orgPrivate') }}
     </span>
-  </button>
+  </Button>
 </template>

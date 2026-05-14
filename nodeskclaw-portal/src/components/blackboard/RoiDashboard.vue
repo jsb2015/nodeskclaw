@@ -4,6 +4,7 @@ import { BarChart3, RefreshCw, Loader2, TrendingUp, Zap, Target } from 'lucide-v
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useI18n } from 'vue-i18n'
 import { formatNumber as formatLocaleNumber } from '@/utils/localeFormat'
+import { Button } from '@/components/ui/button'
 
 const props = defineProps<{
   workspaceId: string
@@ -75,7 +76,7 @@ defineExpose({ refresh: loadPerformance })
         {{ t('blackboard.teamPerformance') }}
       </h3>
       <div class="flex items-center gap-2">
-        <button
+        <Button variant="unstyled" size="unstyled"
           class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
           :disabled="attributing"
           @click="onAttributeTokens"
@@ -83,8 +84,8 @@ defineExpose({ refresh: loadPerformance })
           <Loader2 v-if="attributing" class="w-3 h-3 animate-spin" />
           <Zap v-else class="w-3 h-3" />
           {{ t('blackboard.attributeTokens') }}
-        </button>
-        <button
+        </Button>
+        <Button variant="unstyled" size="unstyled"
           class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
           :disabled="collecting"
           @click="onCollect"
@@ -92,7 +93,7 @@ defineExpose({ refresh: loadPerformance })
           <Loader2 v-if="collecting" class="w-3 h-3 animate-spin" />
           <RefreshCw v-else class="w-3 h-3" />
           {{ t('blackboard.collectPerformance') }}
-        </button>
+        </Button>
       </div>
     </div>
 
