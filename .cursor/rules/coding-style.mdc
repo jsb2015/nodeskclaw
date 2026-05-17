@@ -622,20 +622,21 @@ UniqueConstraint("col_a", "col_b", name="uq_xxx")
 
 ## 部署脚本执行规则
 
-**禁止 AI 助手直接运行 `deploy/release.sh`、`deploy/deploy.sh`、`deploy/init.sh` 或任何构建/部署命令。** 构建镜像、发版和部署到集群必须由用户手动执行。
+**AI 助手默认禁止直接运行 `deploy/release.sh`、`deploy/deploy.sh`、`deploy/init.sh` 或任何构建/部署命令。** 只有用户在同一请求中明确授权 AI 执行发版/部署时，才允许通过 Shell 工具运行这些命令。
 
 ### 必须做
 
 - 代码改完后提交 commit，然后告知用户"代码已提交，可以部署了"
-- 如果用户需要部署命令，给出完整的可复制命令，让用户自己粘贴运行
-- 部署相关的命令示例用代码块展示，不要用 Shell 工具执行
+- 如果用户未明确授权 AI 执行部署，只给出完整的可复制命令，让用户自己粘贴运行
+- 用户明确授权 AI 执行部署时，执行前必须确认目标 `context`、namespace、环境标志（`--staging` / `--prod`）和 tag，所有 K8s 命令必须显式指定 `--context`
+- 部署完成后必须验证 rollout、Pod 状态和服务健康
 
 ### 严禁
 
-- **禁止通过 Shell 工具运行 `deploy/release.sh`、`deploy/deploy.sh`、`deploy/init.sh`**
-- **禁止通过 Shell 工具运行 `docker build`、`docker push`**
-- **禁止通过 Shell 工具运行 `kubectl set image`、`kubectl rollout`**
-- **禁止以任何方式自动触发构建或部署流程**
+- **禁止在没有用户明确授权的情况下通过 Shell 工具运行 `deploy/release.sh`、`deploy/deploy.sh`、`deploy/init.sh`**
+- **禁止在没有用户明确授权的情况下通过 Shell 工具运行 `docker build`、`docker push`**
+- **禁止在没有用户明确授权的情况下通过 Shell 工具运行 `kubectl set image`、`kubectl rollout`**
+- **禁止在没有用户明确授权的情况下以任何方式自动触发构建或部署流程**
 
 ## 变更规模判断规则
 
