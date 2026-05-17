@@ -125,6 +125,7 @@ kubectl get deploy -n <namespace> --context <context-name>
 - **NFS 路径需正确转换**（容器路径 ↔ 本地挂载路径）
 - **修改代码后必须搜索同源逻辑副本并同步修改**
 - **发版/部署脚本默认必须由用户手动执行**；只有用户在同一请求中明确授权 AI 执行发版/部署时，AI 才允许运行 `deploy/release.sh`、`deploy/deploy.sh`、`deploy/init.sh`，并且必须显式确认 `--context` 与目标环境（`--staging` / `--prod`）
+- **部署当前分支/本地分支不是发版授权**；除非用户明确要求“发版 / release / 创建 tag”，否则禁止调用 `deploy/release.sh create`，禁止创建或推送 git tag，禁止创建 GitHub Release
 - **变更涉及 ≥1 个独立功能点时必须提示用户进入 Plan 模式**
 - **K8s 操作必须指定 `--context <name>`**，禁止依赖 current-context 默认值
 - **破坏性操作（删除 namespace/资源、数据库 DELETE、git force push）必须逐项确认**

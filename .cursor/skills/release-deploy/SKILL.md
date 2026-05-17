@@ -24,6 +24,9 @@ description: >-
 | 部署目标 | all / backend / admin / portal / proxy | all |
 | 仅发版 | 用户说"只发版不部署" → 只运行 `release.sh create` | 否 |
 | 仅部署 | 用户说"不重新构建" → 只运行 `deploy.sh deploy --tag <version>` | 否 |
+| 本地分支部署 | 用户说"当前分支/本地分支部署" → 使用分支用途镜像 tag，禁止创建 git tag/GitHub Release | 否 |
+
+注意："部署当前分支"、"部署本地分支"只表示把当前工作树构建为镜像并部署，不等于发版授权。除非用户明确要求"发版"、"release"、"创建 tag"或"GitHub Release"，不得调用 `deploy/release.sh create`，不得创建或推送 git tag，不得创建 GitHub Release。
 
 ### 2. 前置检查（只读命令，直接执行）
 

@@ -629,6 +629,7 @@ UniqueConstraint("col_a", "col_b", name="uq_xxx")
 - 代码改完后提交 commit，然后告知用户"代码已提交，可以部署了"
 - 如果用户未明确授权 AI 执行部署，只给出完整的可复制命令，让用户自己粘贴运行
 - 用户明确授权 AI 执行部署时，执行前必须确认目标 `context`、namespace、环境标志（`--staging` / `--prod`）和 tag，所有 K8s 命令必须显式指定 `--context`
+- 用户要求"部署当前分支"或"部署本地分支"时，只能构建/推送分支用途的镜像 tag 并执行部署，不能视为发版授权
 - 部署完成后必须验证 rollout、Pod 状态和服务健康
 
 ### 严禁
@@ -637,6 +638,7 @@ UniqueConstraint("col_a", "col_b", name="uq_xxx")
 - **禁止在没有用户明确授权的情况下通过 Shell 工具运行 `docker build`、`docker push`**
 - **禁止在没有用户明确授权的情况下通过 Shell 工具运行 `kubectl set image`、`kubectl rollout`**
 - **禁止在没有用户明确授权的情况下以任何方式自动触发构建或部署流程**
+- **禁止把"部署当前分支/本地分支"解释为"发版"，除非用户明确要求发版、release、创建 tag 或 GitHub Release**
 
 ## 变更规模判断规则
 
