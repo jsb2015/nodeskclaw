@@ -865,8 +865,6 @@ const enUS = {
     deleteImpactIrreversible: "This action cannot be undone",
     engineOpenclawName: "General Employee Engine",
     engineOpenclawDesc: "Supports tool calling, gene system, and multi-skill management",
-    engineNanobotName: "Light Work Engine",
-    engineNanobotDesc: "Ultra-lightweight and fast for simple chat scenarios",
     engineHermesName: "Self-Evolving Employee Engine",
     engineHermesDesc: "General-purpose runtime for long-running agents",
     skillEditor: {

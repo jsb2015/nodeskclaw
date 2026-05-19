@@ -30,7 +30,7 @@ def test_should_sync_runtime_llm_config_uses_hermes_org_defaults() -> None:
 
 
 def test_should_sync_runtime_llm_config_skips_unsupported_runtime() -> None:
-    assert _should_sync_runtime_llm_config("nanobot", True, ["openai"]) is False
+    assert _should_sync_runtime_llm_config("unknown_runtime", True, ["openai"]) is False
 
 
 def _deploy_context(*, should_sync_runtime_llm_config: bool) -> _DeployContext:

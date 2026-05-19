@@ -865,8 +865,6 @@ const zhCN = {
     deleteImpactIrreversible: "此操作不可恢复",
     engineOpenclawName: "全能员工引擎",
     engineOpenclawDesc: "支持工具调用、基因系统、多技能管理",
-    engineNanobotName: "轻量工作引擎",
-    engineNanobotDesc: "超轻量，快速部署，适合简单对话场景",
     engineHermesName: "自进化员工引擎",
     engineHermesDesc: "面向长期运行 Agent 的通用执行引擎",
     skillEditor: {
