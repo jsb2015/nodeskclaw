@@ -193,9 +193,10 @@ v1 不做以下协议层抽象：
 
 一个 Agent 可以拥有某类设备的 Skill，也可以通过 MCP 调用对应工具，但这不等于它正在操作一个受治理的、有连续状态的设备现场。
 
-MCP / Tool / Skill 解决“Agent 如何调用能力”；Agent Device 解决“一个会产生真实外部影响的连续设备会话，如何在 Device Context 中被占用、观察、交接、回收和审计”。
+这条边界需要同时从 Agent 和目标平台两侧理解：
 
-真正使用 Agent Device 必须经过设备实例、状态、租约、权限、交接和审计。
+- 对 Agent：MCP / Tool / Skill 解决“Agent 如何调用能力”；Agent Device 解决“一个会产生真实外部影响的连续设备会话，如何在 Device Context 中被占用、观察、交接、回收和审计”。
+- 对目标平台：如果它希望作为 Agent Device 被 Agent 使用，就不能只暴露零散 CLI / Tool / Skill；它必须按本协议把这些能力纳入设备实例、状态、租约、权限、交接和审计模型。CLI / Tool / Skill 可以是 Device Provider 的实现入口，但不是协议本身。
 
 Agent 操作 Agent Device 必须同时满足三层前置条件：
 
