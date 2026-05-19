@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Circle, Loader2, LayoutDashboard, Brain, Dna, History, Radio, FolderOpen, Users, Activity, Archive } from 'lucide-vue-next'
 import api from '@/services/api'
-import { getRuntimeCaps } from '@/utils/runtimeCapabilities'
+import { getRuntimeCaps, setRuntimeEngines } from '@/utils/runtimeCapabilities'
 import { getStatusDisplay } from '@/utils/instanceStatus'
 import { Button } from '@/components/ui/button'
 
@@ -30,7 +30,12 @@ const myInstanceRole = computed(() => instance.value?.my_role ?? null)
 async function fetchBasic() {
   loading.value = true
   try {
-    const res = await api.get(`/instances/${instanceId.value}`)
+    const [res] = await Promise.all([
+      api.get(`/instances/${instanceId.value}`),
+      api.get('/engines')
+        .then((enginesRes) => setRuntimeEngines(enginesRes.data.data ?? []))
+        .catch(() => undefined),
+    ])
     instance.value = res.data.data
   } catch {
     instance.value = null
@@ -118,4 +123,3 @@ const navItems = computed(() => {
     </div>
   </div>
 </template>
-
