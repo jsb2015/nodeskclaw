@@ -179,8 +179,7 @@ API 路由同时挂载在两个前缀下：
 | `POST /api/v1/workspaces/maintenance/repair-channel-accounts` | 维护 | 修复所有实例 channel 配置（super_admin） |
 | `POST /api/v1/workspaces/maintenance/refresh-gene-skills` | 维护 | 批量刷新技能基因 SKILL.md（super_admin） |
 | `/api/v1/workspaces/templates` | 工作区模板 | 列表、创建、详情、删除、应用到工作区 |
-| `/api/v1/workspaces/{ws}/blackboard/posts` | 黑板讨论区 | 帖子 CRUD、置顶、已读标记、未读计数 |
-| `/api/v1/workspaces/{ws}/blackboard/posts/{id}/replies` | 黑板讨论区 | 帖子回复 |
+| `/api/v1/workspaces/{ws}/blackboard` | 黑板 | 黑板正文、任务、目标 |
 | `/api/v1/workspaces/{ws}/blackboard/files` | 共享文件 | 共享文件列表、上传、下载、删除、创建目录（S3 或本地存储） |
 | `/api/v1/files/local/{key}` | 文件下载 | 本地存储模式的 HMAC 签名文件下载端点 |
 | `/api/v1/enterprise-files/agents` | 企业空间 | 列出可浏览的 Agent 实例 |
