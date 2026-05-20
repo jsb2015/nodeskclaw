@@ -33,6 +33,17 @@ def test_is_no_reply_ignores_reasoning_block():
     assert is_no_reply("<think>deciding</think>\nNO_REPLY") is True
 
 
+def test_is_no_reply_treats_bare_no_as_silent_marker():
+    assert is_no_reply("NO") is True
+    assert is_no_reply("no") is True
+    assert is_no_reply("……NO_") is True
+    assert is_no_reply("NO_R") is True
+    assert is_no_reply("这不是给我的\nNO") is True
+    assert is_no_reply("这不是给我的\n……NO_") is True
+    assert is_no_reply("不是") is False
+    assert is_no_reply("NO problem") is False
+
+
 def test_stream_sanitizer_filters_split_tags_without_leaking_content():
     sanitizer = ThinkBlockStreamSanitizer()
 
