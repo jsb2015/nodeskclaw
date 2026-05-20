@@ -215,11 +215,9 @@ interface SuggestionState {
 
 const mentionState = ref<SuggestionState | null>(null)
 const commandState = ref<SuggestionState | null>(null)
-const clearScopeState = ref<SuggestionState | null>(null)
 const pendingCommand = ref<{ id: string; label: string } | null>(null)
 const mentionSuggestionListRef = ref<HTMLElement | null>(null)
 const commandSuggestionListRef = ref<HTMLElement | null>(null)
-const clearScopeSuggestionListRef = ref<HTMLElement | null>(null)
 
 function scrollSuggestionIntoView(containerRef: Ref<HTMLElement | null>, idx: number) {
   nextTick(() => {
@@ -308,20 +306,22 @@ async function executeSlashCommand(name: string, arg?: string) {
         break
       }
       const target = (arg || '').trim()
-      if (!target) {
+      if (target) {
         toast.info(t('chat.clearUsage'), { duration: 8000 })
         break
       }
-      if (target.toLowerCase() === 'chat') {
-        try {
-          await store.clearChatHistory(props.workspaceId)
-          insertSystemMessage(t('chat.chatCleared'), false)
-        } catch (e: any) {
-          insertSystemMessage(t('chat.clearFailed', { error: resolveApiErrorMessage(e, e?.message || '') }))
-        }
-        break
+      try {
+        const result = await store.clearChatHistory(props.workspaceId)
+        const runtime = result.runtime_context
+        insertSystemMessage(t('chat.chatAndContextCleared', {
+          messages: result.cleared_count ?? 0,
+          total: runtime?.total ?? 0,
+          cleared: runtime?.cleared_count ?? 0,
+          failed: runtime?.failed_count ?? 0,
+        }), false)
+      } catch (e: any) {
+        insertSystemMessage(t('chat.clearFailed', { error: resolveApiErrorMessage(e, e?.message || '') }))
       }
-      await doClearAgentRuntimeSession(target)
       break
     }
     case 'restart':
@@ -334,68 +334,6 @@ async function executeSlashCommand(name: string, arg?: string) {
       break
     default:
       insertSystemMessage(t('chat.unknownCommand', { command: name }))
-  }
-}
-
-function buildClearScopeItems(): SuggestionItem[] {
-  return [
-    {
-      id: 'agent-context',
-      label: t('chat.clearScopeAgent'),
-      description: t('chat.clearScopeAgentDescription'),
-      badge: t('chat.clearScopeSafeBadge'),
-      icon: Bot,
-    },
-    {
-      id: 'chat-history',
-      label: t('chat.clearScopeChat'),
-      description: t('chat.clearScopeChatDescription'),
-      badge: t('chat.clearScopeNeedsConfirmBadge'),
-      icon: XCircle,
-    },
-  ]
-}
-
-function openClearScopeMenu() {
-  mentionState.value = null
-  commandState.value = null
-  clearScopeState.value = {
-    items: buildClearScopeItems(),
-    selectedIndex: 0,
-    command: handleClearScopeSelection,
-  }
-  scrollSuggestionIntoView(clearScopeSuggestionListRef, 0)
-}
-
-function handleClearScopeSelection(item: SuggestionItem) {
-  clearScopeState.value = null
-  if (item.id === 'agent-context') {
-    pendingCommand.value = { id: 'clear', label: 'clear' }
-    toast.info(t('chat.clearScopeAgentHint'), { duration: 6000 })
-    nextTick(() => {
-      editor.value?.chain().focus().insertContent('@').run()
-    })
-    return
-  }
-  if (item.id === 'chat-history') {
-    editor.value?.chain().focus().insertContent([
-      { type: 'slashCommand', attrs: { id: 'clear', label: 'clear' } },
-      { type: 'text', text: ' chat ' },
-    ]).run()
-    toast.info(t('chat.clearScopeChatHint'), { duration: 6000 })
-  }
-}
-
-async function doClearAgentRuntimeSession(name: string) {
-  const agent = findAgentByCommandArg(name)
-  if (!agent) { insertSystemMessage(t('chat.agentNotFound', { name })); return }
-  const label = agentLabel(agent)
-  insertSystemMessage(t('chat.clearingAgentContext', { name: label }))
-  try {
-    const result = await store.clearAgentRuntimeSession(props.workspaceId, agent.instance_id)
-    insertSystemMessage(t('chat.agentContextCleared', { name: result.agent_name || label }))
-  } catch (e: any) {
-    insertSystemMessage(t('chat.clearAgentContextFailed', { error: resolveApiErrorMessage(e, e?.message || '') }))
   }
 }
 
@@ -667,8 +605,14 @@ const editor = useEditor({
             return
           }
           if (p.id === 'clear') {
-            ed.chain().focus().deleteRange(range).run()
-            nextTick(openClearScopeMenu)
+            const nodeAfter = ed.view.state.selection.$to.nodeAfter
+            const overrideSpace = nodeAfter?.text?.startsWith(' ')
+            if (overrideSpace) range.to += 1
+            ed.chain().focus().insertContentAt(range, [
+              { type: 'slashCommand', attrs: { id: p.id, label: p.label } },
+              { type: 'text', text: ' ' },
+            ]).run()
+            window.getSelection()?.collapseToEnd()
             return
           }
           if (p.needsAgent) {
@@ -1272,40 +1216,6 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
                 <span v-if="item.sublabel" class="text-[10px] text-muted-foreground truncate">{{ item.sublabel }}</span>
               </div>
               <span class="text-xs text-muted-foreground ml-auto shrink-0">{{ item.slug || item.status }}</span>
-            </Button>
-          </div>
-        </div>
-      </Transition>
-
-      <!-- Clear scope selection dropdown -->
-      <Transition name="dropdown">
-        <div
-          v-if="clearScopeState && clearScopeState.items.length > 0"
-          class="absolute bottom-full left-4 right-4 mb-1 rounded-lg border border-border bg-card shadow-lg overflow-hidden z-10"
-        >
-          <div class="px-3 py-1.5 text-[10px] text-muted-foreground font-medium uppercase tracking-wide border-b border-border">
-            {{ t('chat.clearScopeTitle') }}
-          </div>
-          <div ref="clearScopeSuggestionListRef" class="max-h-44 overflow-y-auto">
-            <Button variant="unstyled" size="unstyled"
-              v-for="(item, idx) in clearScopeState.items"
-              :key="item.id"
-              :data-suggestion-index="idx"
-              class="w-full flex items-center gap-2 px-3 py-2.5 text-sm transition-colors text-left"
-              :class="idx === clearScopeState.selectedIndex ? 'bg-white/[0.07]' : 'hover:bg-white/[0.04]'"
-              @mousedown.prevent="selectSuggestionItem(clearScopeState!, item)"
-              @mouseenter="updateSuggestionIndex(clearScopeState!, idx)"
-            >
-              <component :is="item.icon" class="w-4 h-4 shrink-0 text-primary" />
-              <span class="min-w-0 flex-1">
-                <span class="block font-medium">{{ item.label }}</span>
-                <span class="block text-[10px] leading-4 text-muted-foreground truncate">
-                  {{ item.description }}
-                </span>
-              </span>
-              <span class="ml-auto text-[10px] px-1.5 py-0.5 rounded-full shrink-0 bg-primary/10 text-primary">
-                {{ item.badge }}
-              </span>
             </Button>
           </div>
         </div>

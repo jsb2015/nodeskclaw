@@ -864,19 +864,18 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
 
   async function clearChatHistory(workspaceId: string) {
-    await api.post(`/workspaces/${workspaceId}/messages/clear`)
+    const res = await api.post(`/workspaces/${workspaceId}/messages/clear`)
     chatMessages.value = []
     typingAgents.value.clear()
     unreadCount.value = 0
-  }
-
-  async function clearAgentRuntimeSession(workspaceId: string, agentId: string) {
-    const res = await api.post(`/workspaces/${workspaceId}/agents/${agentId}/runtime-session/clear`)
     return res.data.data as {
-      cleared: boolean
-      agent_id: string
-      agent_name: string
-      runtime: string
+      cleared_count: number
+      runtime_context?: {
+        total: number
+        cleared_count: number
+        skipped_count: number
+        failed_count: number
+      }
     }
   }
 
@@ -1793,7 +1792,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     sendWorkspaceMessage,
     sendSystemMessage,
     clearChatHistory,
-    clearAgentRuntimeSession,
     connectSSE,
     disconnectSSE,
     sendMessage,

@@ -1464,6 +1464,53 @@ class SystemMessageRequest(BaseModel):
     content: str
 
 
+async def _clear_instance_runtime_context(
+    instance: Instance,
+    workspace_id: str,
+    db: AsyncSession,
+) -> dict:
+    runtime = instance.runtime or "openclaw"
+    result = {
+        "agent_id": instance.id,
+        "agent_name": instance.agent_display_name or instance.name,
+        "runtime": runtime,
+        "cleared": False,
+        "skipped": False,
+        "error": None,
+    }
+    if runtime not in {"openclaw", "hermes"}:
+        result["skipped"] = True
+        return result
+
+    try:
+        from app.services.nfs_mount import remote_fs
+
+        async with remote_fs(instance, db) as fs:
+            if runtime == "hermes":
+                from app.services.hermes_session import clear_workspace_session
+
+                result["cleared"] = bool(await clear_workspace_session(fs, workspace_id))
+            else:
+                from app.services.openclaw_session import clear_main_session
+                from app.services.openclaw_session import clear_workspace_session
+
+                cleared = await clear_workspace_session(fs, workspace_id)
+                if not cleared:
+                    cleared = await clear_main_session(fs)
+                result["cleared"] = bool(cleared)
+    except Exception as e:
+        logger.warning(
+            "clear_workspace_messages: 清理 runtime 上下文失败 workspace=%s instance=%s runtime=%s error=%s",
+            workspace_id,
+            instance.id,
+            runtime,
+            e,
+        )
+        result["error"] = str(e)
+
+    return result
+
+
 @router.post("/{workspace_id}/messages/clear")
 async def clear_workspace_messages(
     workspace_id: str,
@@ -1473,74 +1520,43 @@ async def clear_workspace_messages(
     await wm_service.check_workspace_access(workspace_id, user, "manage_settings", db)
 
     cleared_count = await msg_service.clear_workspace_messages(db, workspace_id)
-
-    broadcast_event(workspace_id, "chat:cleared", {
-        "cleared_count": cleared_count,
-    })
-    return _ok({
-        "cleared_count": cleared_count,
-    })
-
-
-@router.post("/{workspace_id}/agents/{agent_id}/runtime-session/clear")
-async def clear_agent_runtime_session(
-    workspace_id: str,
-    agent_id: str,
-    db: AsyncSession = Depends(get_db),
-    user=Depends(_get_current_user_dep()),
-):
-    await wm_service.check_workspace_access(workspace_id, user, "manage_settings", db)
-
-    row = (await db.execute(
+    rows = (await db.execute(
         sa_select(WorkspaceAgent, Instance)
         .join(Instance, Instance.id == WorkspaceAgent.instance_id)
         .where(
             WorkspaceAgent.workspace_id == workspace_id,
             WorkspaceAgent.deleted_at.is_(None),
             Instance.deleted_at.is_(None),
-            (WorkspaceAgent.instance_id == agent_id) | (WorkspaceAgent.id == agent_id),
         )
-        .limit(1)
-    )).first()
-    if not row:
-        raise _error(404, 40431, "errors.workspace.agent_not_found", "AI 员工不存在")
-
-    agent, instance = row
-    if not instance.runtime:
-        raise _error(400, 40036, "errors.workspace.agent_runtime_missing", "AI 员工缺少运行时配置")
-    if instance.runtime not in {"openclaw", "hermes"}:
-        raise _error(400, 40037, "errors.workspace.agent_runtime_unsupported", "该运行时暂不支持清理本地上下文")
-
-    from app.services.nfs_mount import remote_fs
-
-    cleared = False
-    async with remote_fs(instance, db) as fs:
-        if instance.runtime == "hermes":
-            from app.services.hermes_session import clear_workspace_session
-            cleared = await clear_workspace_session(fs, workspace_id)
-        else:
-            from app.services.openclaw_session import clear_main_session
-            from app.services.openclaw_session import clear_workspace_session
-            cleared = await clear_workspace_session(fs, workspace_id)
-            if not cleared:
-                cleared = await clear_main_session(fs)
-
-    agent_name = agent.display_name or instance.agent_display_name or instance.name
+    )).all()
+    runtime_results = [
+        await _clear_instance_runtime_context(instance, workspace_id, db)
+        for _agent, instance in rows
+    ]
+    runtime_context = {
+        "total": len(runtime_results),
+        "cleared_count": sum(1 for item in runtime_results if item["cleared"]),
+        "skipped_count": sum(1 for item in runtime_results if item["skipped"]),
+        "failed_count": sum(1 for item in runtime_results if item["error"]),
+        "results": runtime_results,
+    }
     logger.info(
-        "clear_agent_runtime_session: workspace=%s user=%s agent=%s instance=%s runtime=%s cleared=%s",
+        "clear_workspace_messages: workspace=%s user=%s messages=%s runtime_total=%s runtime_cleared=%s runtime_failed=%s",
         workspace_id,
         getattr(user, "id", None),
-        agent_name,
-        instance.id,
-        instance.runtime,
-        cleared,
+        cleared_count,
+        runtime_context["total"],
+        runtime_context["cleared_count"],
+        runtime_context["failed_count"],
     )
 
+    broadcast_event(workspace_id, "chat:cleared", {
+        "cleared_count": cleared_count,
+        "runtime_context": runtime_context,
+    })
     return _ok({
-        "cleared": bool(cleared),
-        "agent_id": agent.instance_id,
-        "agent_name": agent_name,
-        "runtime": instance.runtime,
+        "cleared_count": cleared_count,
+        "runtime_context": runtime_context,
     })
 
 
