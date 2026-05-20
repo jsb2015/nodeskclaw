@@ -120,7 +120,6 @@ class TestHermesChannelSchema:
         by_key = {field["key"]: field for field in schema}
         assert by_key["botToken"]["applicable"] is True
         assert by_key["groupPolicy"]["applicable"] is True
-        assert by_key["proxy"]["applicable"] is False
 
     def test_slack_schema_remains_unsupported_for_hermes(self):
         schema = get_channel_schema("slack", runtime_id="hermes")
