@@ -11,7 +11,6 @@ def test_runtime_registry_display_order_and_names():
     assert [(spec.runtime_id, spec.display_name, spec.order) for spec in specs] == [
         ("openclaw", "全能员工引擎", 0),
         ("hermes", "自进化员工引擎", 1),
-        ("nanobot", "轻量工作引擎", 2),
     ]
 
 
@@ -35,11 +34,9 @@ def test_runtime_specs_have_complete_product_capabilities():
 def test_builtin_runtime_capability_matrix_matches_first_stage_contract():
     openclaw = RUNTIME_REGISTRY.get("openclaw")
     hermes = RUNTIME_REGISTRY.get("hermes")
-    nanobot = RUNTIME_REGISTRY.get("nanobot")
 
     assert openclaw is not None
     assert hermes is not None
-    assert nanobot is not None
 
     assert openclaw.capability_map()["tool_allow"] is True
     assert openclaw.capability_map()["runtime_config_patch"] is True
@@ -52,10 +49,6 @@ def test_builtin_runtime_capability_matrix_matches_first_stage_contract():
     assert hermes.capability_map()["runtime_config_patch"] is False
     assert hermes.capability_map()["repo_channel_sync"] is False
     assert hermes.capability_map()["web_ui"] is False
-
-    assert nanobot.capability_map()["genes"] is False
-    assert nanobot.capability_map()["evolution_log"] is True
-    assert nanobot.capability_map()["tool_allow"] is False
 
 
 def test_runtime_registry_rejects_specs_missing_required_product_metadata():
@@ -77,5 +70,3 @@ async def test_engine_listing_returns_runtime_capabilities():
     assert engines["hermes"]["capabilities"]["evolution_log"] is True
     assert engines["hermes"]["capabilities"]["tool_allow"] is False
     assert engines["hermes"]["config_rel_path"] == ".hermes/config.yaml"
-
-    assert engines["nanobot"]["capabilities"]["genes"] is False

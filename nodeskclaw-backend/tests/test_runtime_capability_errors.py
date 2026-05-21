@@ -74,12 +74,12 @@ async def test_hermes_gene_adapter_reports_unsupported_manifest_actions():
 
 @pytest.mark.asyncio
 async def test_noop_gene_adapter_reports_runtime_id_for_unsupported_manifest_actions():
-    adapter = NoopGeneInstallAdapter(runtime_id="nanobot")
+    adapter = NoopGeneInstallAdapter(runtime_id="custom")
 
     with pytest.raises(UnsupportedCapabilityError) as exc:
         await adapter.allow_tools(object(), ["shared-files"])
 
-    assert exc.value.details["runtime_id"] == "nanobot"
+    assert exc.value.details["runtime_id"] == "custom"
     assert exc.value.details["capability"] == "tool_allow"
 
 
