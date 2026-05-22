@@ -479,7 +479,11 @@ export const useGeneStore = defineStore('gene', () => {
     gene_slugs?: string[]
   }) {
     const res = await api.put(`/instance-templates/${id}`, data)
-    return res.data.data
+    const updated = res.data.data
+    const idx = templates.value.findIndex((tpl) => tpl.id === id)
+    if (idx >= 0) templates.value[idx] = updated
+    if (currentTemplate.value?.id === id) currentTemplate.value = updated
+    return updated
   }
 
   async function deleteTemplate(id: string) {

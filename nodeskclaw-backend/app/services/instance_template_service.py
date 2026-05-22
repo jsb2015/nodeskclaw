@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ConflictError, NotFoundError
+from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
 from app.models.base import not_deleted
 from app.models.gene import ContentVisibility, Gene, GeneSource, Genome, InstanceGene
 from app.models.instance import Instance
@@ -89,6 +89,72 @@ def _parse_json_list(raw: str | None) -> list:
     except (json.JSONDecodeError, TypeError):
         return []
     return data if isinstance(data, list) else []
+
+
+def _clean_template_display_name(value: str | None) -> str | None:
+    cleaned = str(value or "").strip()
+    return cleaned[:128] if cleaned else None
+
+
+def _agent_bundle_text_blob(manifest: dict[str, Any]) -> str:
+    parts: list[str] = [
+        str(manifest.get("name") or ""),
+        str(manifest.get("slug") or ""),
+        str(manifest.get("description") or ""),
+    ]
+    config = manifest.get("config")
+    if isinstance(config, dict):
+        for key in ("name", "slug", "description", "welcomeMessage", "welcome_message", "role", "persona"):
+            value = config.get(key)
+            if isinstance(value, str):
+                parts.append(value)
+    files = manifest.get("files") if isinstance(manifest.get("files"), dict) else {}
+    for key in ("AGENT.md", "SOUL.md", "README.md"):
+        value = files.get(key)
+        if isinstance(value, str):
+            parts.append(value[:2000])
+    for skill in manifest.get("skills", []):
+        if isinstance(skill, dict):
+            parts.append(str(skill.get("name") or ""))
+            parts.append(str(skill.get("slug") or ""))
+            parts.append(str(skill.get("description") or ""))
+    return "\n".join(parts).lower()
+
+
+def _suggest_agent_bundle_display_name(manifest: dict[str, Any]) -> str:
+    config = manifest.get("config") if isinstance(manifest.get("config"), dict) else {}
+    explicit_candidates = [
+        manifest.get("display_name"),
+        manifest.get("displayName"),
+        config.get("display_name"),
+        config.get("displayName"),
+        config.get("zhName"),
+        config.get("chineseName"),
+    ]
+    for candidate in explicit_candidates:
+        cleaned = _clean_template_display_name(candidate)
+        if cleaned:
+            return cleaned
+
+    text = _agent_bundle_text_blob(manifest)
+    rules: list[tuple[tuple[str, ...], str]] = [
+        (("小红书", "xiaohongshu", "redbook", "爆款"), "小红书爆款作者"),
+        (("数字人", "avatar", "video clone", "clone video", "视频复刻", "复刻视频"), "数字人视频复刻专家"),
+        (("video", "短视频", "视频", "剪辑"), "视频内容制作专家"),
+        (("travel", "trip", "itinerary", "旅行", "行程"), "旅行规划师"),
+        (("business", "商业", "经营", "财务", "strategy", "market analysis"), "商业分析师"),
+        (("research", "调研", "研究", "资料", "文献"), "研究分析师"),
+        (("text-polish", "text-summary", "text-structure", "润色", "摘要", "结构化", "纯文本"), "文本编辑助理"),
+        (("copywriting", "content", "内容", "文案", "写作", "social"), "内容创作策划"),
+        (("code", "software", "developer", "dev", "coding", "研发", "代码"), "软件研发工程师"),
+        (("data", "analytics", "analysis", "数据", "报表"), "数据分析师"),
+        (("customer", "support", "客服", "售后"), "客户支持专员"),
+        (("operation", "ops", "运营"), "运营增长专员"),
+    ]
+    for keywords, display_name in rules:
+        if any(keyword in text for keyword in keywords):
+            return display_name
+    return "业务智能助理"
 
 
 async def _resolve_gene_refs(db: AsyncSession, slugs: list[str]) -> list[GeneRef]:
@@ -528,8 +594,10 @@ async def import_agent_bundle_manifest(
     )
     items_input = [TemplateItemInput(type="gene", slug=s) for s in gene_slugs]
 
+    template_name = _clean_template_display_name(name) or _suggest_agent_bundle_display_name(manifest)
+
     tpl = InstanceTemplate(
-        name=name or str(manifest["name"]),
+        name=template_name,
         slug=template_slug,
         description=description if description is not None else manifest.get("description"),
         short_description=short_description or manifest.get("description"),
@@ -633,7 +701,10 @@ async def update_template(
 ) -> InstanceTemplateInfo:
     tpl = await _get_template_model(db, template_id, org_id, require_manage=True)
     if req.name is not None:
-        tpl.name = req.name
+        cleaned_name = _clean_template_display_name(req.name)
+        if not cleaned_name:
+            raise BadRequestError("模板显示名称不能为空")
+        tpl.name = cleaned_name
     if req.description is not None:
         tpl.description = req.description
     if req.short_description is not None:

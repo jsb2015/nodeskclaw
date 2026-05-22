@@ -25,11 +25,14 @@ import {
   Upload,
   KeyRound,
   FileText,
+  Check,
+  X,
 } from 'lucide-vue-next'
 import { useGeneStore } from '@/stores/gene'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 const route = useRoute()
 const router = useRouter()
@@ -41,6 +44,9 @@ const { t } = useI18n()
 const templateId = computed(() => route.params.id as string)
 const tpl = computed(() => store.currentTemplate)
 const deleting = ref(false)
+const editingName = ref(false)
+const editingNameValue = ref('')
+const savingName = ref(false)
 const bundleSkills = computed(() => tpl.value?.agent_bundle?.skills ?? [])
 const bundleFiles = computed(() => tpl.value?.agent_bundle?.files ?? [])
 const bundleEnvKeys = computed(() => tpl.value?.agent_bundle?.env_keys ?? [])
@@ -75,6 +81,36 @@ onMounted(() => {
 
 function useThisTemplate() {
   router.push({ name: 'CreateInstance', query: { template_id: templateId.value } })
+}
+
+function startNameEdit() {
+  if (!tpl.value) return
+  editingName.value = true
+  editingNameValue.value = tpl.value.name
+}
+
+function cancelNameEdit() {
+  editingName.value = false
+  editingNameValue.value = ''
+}
+
+async function saveNameEdit() {
+  if (!tpl.value) return
+  const nextName = editingNameValue.value.trim()
+  if (!nextName) {
+    toast.error(t('template.displayNameRequired'))
+    return
+  }
+  savingName.value = true
+  try {
+    await store.updateTemplate(tpl.value.id, { name: nextName })
+    toast.success(t('template.displayNameUpdated'))
+    cancelNameEdit()
+  } catch (e: any) {
+    toast.error(e?.response?.data?.message || t('template.displayNameUpdateFailed'))
+  } finally {
+    savingName.value = false
+  }
 }
 
 async function handleDelete() {
@@ -122,7 +158,48 @@ async function handleDelete() {
               <component :is="resolveIcon(tpl.icon)" class="w-7 h-7 text-primary" />
             </div>
             <div class="flex-1 min-w-0">
-              <h1 class="text-2xl font-bold mb-1">{{ tpl.name }}</h1>
+              <div v-if="editingName" class="flex items-center gap-2 mb-2">
+                <Input
+                  v-model="editingNameValue"
+                  class="h-10 max-w-md text-lg font-semibold"
+                  :placeholder="t('template.displayNamePlaceholder')"
+                  @keydown.enter.stop.prevent="saveNameEdit"
+                  @keydown.esc.stop.prevent="cancelNameEdit"
+                />
+                <Button variant="unstyled" size="unstyled"
+                  class="p-2 rounded-lg text-primary hover:bg-primary/10 disabled:opacity-50"
+                  :title="t('template.saveDisplayName')"
+                  :aria-label="t('template.saveDisplayName')"
+                  :disabled="savingName"
+                  @click="saveNameEdit"
+                >
+                  <Loader2 v-if="savingName" class="w-4 h-4 animate-spin" />
+                  <Check v-else class="w-4 h-4" />
+                </Button>
+                <Button variant="unstyled" size="unstyled"
+                  class="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
+                  :title="t('common.cancel')"
+                  :aria-label="t('common.cancel')"
+                  @click="cancelNameEdit"
+                >
+                  <X class="w-4 h-4" />
+                </Button>
+              </div>
+              <div v-else class="flex items-center gap-2 mb-1">
+                <h1 class="text-2xl font-bold truncate">{{ tpl.name }}</h1>
+                <Button variant="unstyled" size="unstyled"
+                  v-if="tpl.template_type === 'agent_bundle'"
+                  class="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
+                  :title="t('template.editDisplayName')"
+                  :aria-label="t('template.editDisplayName')"
+                  @click="startNameEdit"
+                >
+                  <Pencil class="w-4 h-4" />
+                </Button>
+              </div>
+              <p v-if="tpl.template_type === 'agent_bundle' && tpl.agent_bundle?.name" class="text-sm text-muted-foreground mb-1">
+                {{ t('template.standardName') }}: {{ tpl.agent_bundle.name }}
+              </p>
               <p v-if="tpl.short_description" class="text-muted-foreground">{{ tpl.short_description }}</p>
               <div class="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
                 <span class="flex items-center gap-1">

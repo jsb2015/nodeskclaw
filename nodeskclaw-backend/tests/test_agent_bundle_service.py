@@ -13,7 +13,10 @@ from app.services.agent_bundle_service import (
     summarize_agent_bundle_manifest,
 )
 from app.services.deploy_service import _collect_secret_env_refs
-from app.services.instance_template_service import import_agent_bundle_manifest
+from app.services.instance_template_service import (
+    _suggest_agent_bundle_display_name,
+    import_agent_bundle_manifest,
+)
 from app.services.k8s.resource_builder import build_configmap, build_deployment, build_labels
 
 FIXTURES = Path(__file__).parent / "fixtures" / "agent_bundles"
@@ -115,6 +118,22 @@ def test_secret_env_refs_are_injected_as_k8s_secret_refs_not_configmap_data() ->
     assert env_by_name["OAUTH_ACCESS_TOKEN"].value_from.secret_key_ref.key == "access_token"
 
 
+def test_agent_bundle_display_name_uses_role_heuristics() -> None:
+    video_manifest = parse_agent_bundle_dir(FIXTURES / "p5_video_clone_mock_agent")
+    text_manifest = {
+        "name": "plain-text-skills-agent",
+        "slug": "plain-text-skills-agent",
+        "description": "",
+        "skills": [
+            {"name": "text-polish", "slug": "text-polish", "description": "Polish Chinese text"},
+            {"name": "text-summary", "slug": "text-summary", "description": "Summarize text"},
+        ],
+    }
+
+    assert _suggest_agent_bundle_display_name(video_manifest) == "数字人视频复刻专家"
+    assert _suggest_agent_bundle_display_name(text_manifest) == "文本编辑助理"
+
+
 @pytest.mark.asyncio
 async def test_import_agent_bundle_creates_private_template_and_genes(require_test_db) -> None:
     manifest = parse_agent_bundle_dir(FIXTURES / "p1_template_import_agent")
@@ -128,9 +147,11 @@ async def test_import_agent_bundle_creates_private_template_and_genes(require_te
         )
 
         assert template.template_type == "agent_bundle"
+        assert template.name == "业务智能助理"
         assert template.slug == "p1-template-import-agent"
         assert template.agent_bundle is not None
-        assert template.agent_bundle["files"] == ["AGENT.md", "SOUL.md", "config.json", "skills/research/SKILL.md"]
+        assert template.agent_bundle["name"] == "Template Import Agent"
+        assert template.agent_bundle["files"] == ["AGENT.md", "SOUL.md", "config.json", "skills/importer/SKILL.md"]
         assert template.gene_slugs
 
         result = await db.execute(select(Gene).where(Gene.slug.in_(template.gene_slugs)))

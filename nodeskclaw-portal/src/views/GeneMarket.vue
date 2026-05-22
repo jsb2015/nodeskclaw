@@ -29,6 +29,7 @@ import {
   Globe,
   HardDrive,
   Upload,
+  Pencil,
 } from 'lucide-vue-next'
 import { useGeneStore } from '@/stores/gene'
 import type { GeneItem, GenomeItem, TemplateInfo } from '@/stores/gene'
@@ -131,6 +132,9 @@ const evoPendingLoading = ref(false)
 const evoReviewingId = ref<string | null>(null)
 const bundleFileInput = ref<HTMLInputElement | null>(null)
 const importingBundle = ref(false)
+const editingTemplateId = ref<string | null>(null)
+const editingTemplateName = ref('')
+const savingTemplateId = ref<string | null>(null)
 
 async function loadEvolution() {
   evoLoading.value = true
@@ -294,6 +298,38 @@ function hasNativeTools(gene: GeneItem): boolean {
 
 function openBundleImport() {
   bundleFileInput.value?.click()
+}
+
+function getTemplateStandardName(tpl: TemplateInfo): string {
+  return tpl.agent_bundle?.name || tpl.slug
+}
+
+function startTemplateNameEdit(tpl: TemplateInfo) {
+  editingTemplateId.value = tpl.id
+  editingTemplateName.value = tpl.name
+}
+
+function cancelTemplateNameEdit() {
+  editingTemplateId.value = null
+  editingTemplateName.value = ''
+}
+
+async function saveTemplateName(tpl: TemplateInfo) {
+  const nextName = editingTemplateName.value.trim()
+  if (!nextName) {
+    toast.error(t('template.displayNameRequired'))
+    return
+  }
+  savingTemplateId.value = tpl.id
+  try {
+    await store.updateTemplate(tpl.id, { name: nextName })
+    toast.success(t('template.displayNameUpdated'))
+    cancelTemplateNameEdit()
+  } catch (e: any) {
+    toast.error(e?.response?.data?.message || t('template.displayNameUpdateFailed'))
+  } finally {
+    savingTemplateId.value = null
+  }
 }
 
 async function handleBundleImport(event: Event) {
@@ -809,8 +845,52 @@ async function handleBundleImport(event: Event) {
                     <component :is="resolveIcon(tpl.icon)" class="w-5 h-5 text-primary" />
                   </div>
                   <div class="min-w-0 flex-1">
-                    <div class="flex items-center gap-2 min-w-0">
-                      <span class="font-medium truncate block">{{ tpl.name }}</span>
+                    <div class="flex items-start gap-2 min-w-0">
+                      <div class="min-w-0 flex-1">
+                        <div
+                          v-if="editingTemplateId === tpl.id"
+                          class="flex items-center gap-1"
+                          @click.stop
+                        >
+                          <Input
+                            v-model="editingTemplateName"
+                            class="h-8 min-w-0 text-sm"
+                            :placeholder="t('template.displayNamePlaceholder')"
+                            @keydown.enter.stop.prevent="saveTemplateName(tpl)"
+                            @keydown.esc.stop.prevent="cancelTemplateNameEdit"
+                          />
+                          <Button variant="unstyled" size="unstyled"
+                            class="shrink-0 p-1.5 rounded-md text-primary hover:bg-primary/10 disabled:opacity-50"
+                            :title="t('template.saveDisplayName')"
+                            :aria-label="t('template.saveDisplayName')"
+                            :disabled="savingTemplateId === tpl.id"
+                            @click.stop="saveTemplateName(tpl)"
+                          >
+                            <Loader2 v-if="savingTemplateId === tpl.id" class="w-4 h-4 animate-spin" />
+                            <Check v-else class="w-4 h-4" />
+                          </Button>
+                          <Button variant="unstyled" size="unstyled"
+                            class="shrink-0 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
+                            :title="t('common.cancel')"
+                            :aria-label="t('common.cancel')"
+                            @click.stop="cancelTemplateNameEdit"
+                          >
+                            <X class="w-4 h-4" />
+                          </Button>
+                        </div>
+                        <div v-else class="flex items-center gap-2 min-w-0">
+                          <span class="font-medium truncate block">{{ tpl.name }}</span>
+                          <Button variant="unstyled" size="unstyled"
+                            v-if="tpl.template_type === 'agent_bundle'"
+                            class="shrink-0 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
+                            :title="t('template.editDisplayName')"
+                            :aria-label="t('template.editDisplayName')"
+                            @click.stop="startTemplateNameEdit(tpl)"
+                          >
+                            <Pencil class="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </div>
                       <span
                         v-if="tpl.template_type === 'agent_bundle'"
                         class="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400"
@@ -818,6 +898,12 @@ async function handleBundleImport(event: Event) {
                         {{ t('template.agentBundleBadge') }}
                       </span>
                     </div>
+                    <p
+                      v-if="tpl.template_type === 'agent_bundle'"
+                      class="text-xs text-muted-foreground truncate mt-1"
+                    >
+                      {{ t('template.standardName') }}: {{ getTemplateStandardName(tpl) }}
+                    </p>
                     <p class="text-xs text-muted-foreground line-clamp-2 mt-1">
                       {{ tpl.short_description ?? tpl.description ?? '' }}
                     </p>
