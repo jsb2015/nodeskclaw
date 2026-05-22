@@ -112,6 +112,28 @@ def _require_supported_runtime(runtime: str) -> None:
         )
 
 
+def _collect_secret_env_refs(agent_bundle_manifest: dict | None) -> list[dict]:
+    if not agent_bundle_manifest:
+        return []
+    refs = agent_bundle_manifest.get("secret_refs")
+    if not isinstance(refs, list):
+        return []
+    collected: list[dict] = []
+    for ref in refs:
+        if not isinstance(ref, dict):
+            continue
+        env_name = ref.get("env") or ref.get("env_name")
+        secret_name = ref.get("secret_name") or ref.get("secretName")
+        secret_key = ref.get("key") or ref.get("secret_key") or ref.get("secretKey")
+        if env_name and secret_name and secret_key:
+            collected.append({
+                "env": str(env_name),
+                "secret_name": str(secret_name),
+                "key": str(secret_key),
+            })
+    return collected
+
+
 # 正在运行的部署任务引用（deploy_id -> asyncio.Task）
 _running_tasks: dict[str, asyncio.Task] = {}
 
@@ -415,6 +437,7 @@ class _DeployContext:
     should_sync_runtime_llm_config: bool = False
     template_id: str | None = None
     template_gene_slugs: list[str] | None = None
+    template_agent_bundle_manifest: dict | None = None
     compute_provider: str = "k8s"
     runtime: str = "openclaw"
     pvc_access_mode: str | None = None
@@ -527,6 +550,15 @@ async def deploy_instance(
     )
 
     env_vars = dict(req.env_vars) if req.env_vars else {}
+    template_agent_bundle_manifest: dict | None = None
+    if req.template_id:
+        from app.services.instance_template_service import (
+            get_template_agent_bundle_manifest,
+            get_template_deploy_env_vars,
+        )
+        template_agent_bundle_manifest = await get_template_agent_bundle_manifest(db, req.template_id, org_id)
+        env_vars.update(await get_template_deploy_env_vars(db, req.template_id, org_id))
+
     gateway_token = env_vars.get("GATEWAY_TOKEN") or env_vars.get("OPENCLAW_GATEWAY_TOKEN")
     if not gateway_token:
         gateway_token = _secrets.token_hex(24)
@@ -548,6 +580,12 @@ async def deploy_instance(
     if docker_host_port is not None:
         env_vars["DOCKER_HOST_PORT"] = str(docker_host_port)
 
+    advanced_config = _json.loads(_json.dumps(req.advanced_config)) if req.advanced_config else {}
+    secret_env_refs = _collect_secret_env_refs(template_agent_bundle_manifest)
+    if secret_env_refs:
+        existing_refs = advanced_config.setdefault("secret_env_refs", [])
+        existing_refs.extend(secret_env_refs)
+
     # 创建实例记录
     instance = Instance(
         name=req.name,
@@ -566,7 +604,7 @@ async def deploy_instance(
         proxy_token=gateway_token,
         wp_api_key=f"nodeskclaw-wp-{_secrets.token_hex(32)}",
         env_vars=_json.dumps(env_vars),
-        advanced_config=_json.dumps(req.advanced_config) if req.advanced_config else None,
+        advanced_config=_json.dumps(advanced_config) if advanced_config else None,
         llm_providers=_compute_llm_providers(req.llm_configs, org_active_providers),
         storage_class=req.storage_class,
         storage_size=req.storage_size,
@@ -580,6 +618,9 @@ async def deploy_instance(
     await db.refresh(instance)
 
     env_vars["NODESKCLAW_INSTANCE_ID"] = str(instance.id)
+    if req.template_id and template_agent_bundle_manifest:
+        from app.services.instance_template_service import get_template_deploy_env_vars
+        env_vars.update(await get_template_deploy_env_vars(db, req.template_id, org_id, instance_id=str(instance.id)))
     instance.env_vars = _json.dumps(env_vars)
     await db.commit()
 
@@ -654,7 +695,7 @@ async def deploy_instance(
         quota_cpu=req.quota_cpu,
         quota_mem=req.quota_mem,
         env_vars=env_vars,
-        advanced_config=req.advanced_config,
+        advanced_config=advanced_config,
         proxy_endpoint=cluster.proxy_endpoint,
         api_server_url=cluster.api_server_url,
         org_id=org_id,
@@ -662,6 +703,7 @@ async def deploy_instance(
         should_sync_runtime_llm_config=should_sync_runtime_llm_config,
         template_id=req.template_id,
         template_gene_slugs=template_gene_slugs,
+        template_agent_bundle_manifest=template_agent_bundle_manifest,
         compute_provider=instance.compute_provider,
         runtime=instance.runtime,
         pvc_access_mode=req.pvc_access_mode,
@@ -686,6 +728,8 @@ async def execute_deploy_pipeline(ctx: _DeployContext) -> None:
     steps = list(DEPLOY_STEPS_BASE)
     if ctx.should_sync_runtime_llm_config:
         steps.append("应用实例配置")
+    if ctx.template_agent_bundle_manifest:
+        steps.append("恢复 AI 员工模板包")
     if ctx.template_gene_slugs:
         steps.append("安装模板技能基因")
     total = len(steps)
@@ -1229,6 +1273,7 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
                 await db.commit()
 
                 llm_sync_warning = ""
+                optional_step = len(DEPLOY_STEPS_BASE) + 1
                 if ctx.runtime in {"openclaw", "hermes"}:
                     from app.services.llm_config_service import (
                         ensure_openclaw_gateway_config,
@@ -1237,7 +1282,8 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
 
                     try:
                         if ctx.should_sync_runtime_llm_config:
-                            config_step = len(DEPLOY_STEPS_BASE) + 1
+                            config_step = optional_step
+                            optional_step += 1
                             _publish(config_step, "应用实例配置")
                             if ctx.runtime == "openclaw":
                                 await ensure_openclaw_gateway_config(instance, db)
@@ -1255,6 +1301,28 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
                         if ctx.should_sync_runtime_llm_config:
                             _publish(config_step, "应用实例配置", status="failed",
                                      message=str(e)[:200])
+
+                bundle_restore_warning = ""
+                if ctx.template_agent_bundle_manifest:
+                    bundle_step = optional_step
+                    optional_step += 1
+                    _publish(bundle_step, "恢复 AI 员工模板包")
+                    try:
+                        from app.services.agent_bundle_service import restore_agent_bundle
+
+                        await restore_agent_bundle(instance, ctx.template_agent_bundle_manifest, db)
+                        _publish(bundle_step, "恢复 AI 员工模板包", status="success")
+                    except Exception as bundle_err:
+                        logger.warning(
+                            "AI 员工模板包恢复失败（非致命） [deploy_id=%s, instance_id=%s]: %s",
+                            ctx.record_id,
+                            ctx.instance_id,
+                            bundle_err,
+                            exc_info=True,
+                        )
+                        bundle_restore_warning = "（AI 员工模板包恢复失败，可在实例详情中重试或检查模板）"
+                        _publish(bundle_step, "恢复 AI 员工模板包", status="failed",
+                                 message=str(bundle_err)[:200])
 
                 gene_install_warning = ""
                 if ctx.template_gene_slugs:
@@ -1308,7 +1376,7 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
                         except Exception:
                             logger.warning("Failed to increment template use count for %s", ctx.template_id, exc_info=True)
 
-                success_msg = f"部署成功{llm_sync_warning}{gene_install_warning}"
+                success_msg = f"部署成功{llm_sync_warning}{bundle_restore_warning}{gene_install_warning}"
                 _publish(total, "完成", status="success", message=success_msg)
                 logger.info("部署成功: %s (namespace=%s)", ctx.name, ctx.namespace)
             else:

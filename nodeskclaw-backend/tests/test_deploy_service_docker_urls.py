@@ -129,3 +129,22 @@ async def test_execute_deploy_pipeline_skips_config_step_without_runtime_sync(mo
 
     assert captured["total"] == len(DEPLOY_STEPS_BASE)
     assert captured["steps"] == DEPLOY_STEPS_BASE
+
+
+@pytest.mark.asyncio
+async def test_execute_deploy_pipeline_adds_agent_bundle_restore_step(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    async def fake_execute_inner(ctx, async_session_factory, get_config, total, steps):
+        captured["ctx"] = ctx
+        captured["total"] = total
+        captured["steps"] = steps
+
+    ctx = _deploy_context(should_sync_runtime_llm_config=False)
+    ctx.template_agent_bundle_manifest = {"slug": "p0-echo-agent", "files": {}, "skills": []}
+    monkeypatch.setattr(deploy_service, "_execute_deploy_inner", fake_execute_inner)
+
+    await deploy_service.execute_deploy_pipeline(ctx)
+
+    assert captured["total"] == len(DEPLOY_STEPS_BASE) + 1
+    assert captured["steps"] == [*DEPLOY_STEPS_BASE, "恢复 AI 员工模板包"]

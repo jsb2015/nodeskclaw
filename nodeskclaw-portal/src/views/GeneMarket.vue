@@ -28,6 +28,7 @@ import {
   X,
   Globe,
   HardDrive,
+  Upload,
 } from 'lucide-vue-next'
 import { useGeneStore } from '@/stores/gene'
 import type { GeneItem, GenomeItem, TemplateInfo } from '@/stores/gene'
@@ -128,6 +129,8 @@ const evoLoading = ref(false)
 const evoActivityLoading = ref(false)
 const evoPendingLoading = ref(false)
 const evoReviewingId = ref<string | null>(null)
+const bundleFileInput = ref<HTMLInputElement | null>(null)
+const importingBundle = ref(false)
 
 async function loadEvolution() {
   evoLoading.value = true
@@ -287,6 +290,28 @@ function hasNativeTools(gene: GeneItem): boolean {
   if (Array.isArray(mcpServers) && mcpServers.length > 0) return true
   const tags = gene.tags ?? []
   return tags.some((t) => ['mcp', 'tools'].includes(String(t).toLowerCase()))
+}
+
+function openBundleImport() {
+  bundleFileInput.value?.click()
+}
+
+async function handleBundleImport(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  importingBundle.value = true
+  try {
+    await store.importAgentBundle(file)
+    toast.success(t('template.bundleImported'))
+    viewMode.value = 'templates'
+    await loadData()
+  } catch (e: any) {
+    toast.error(e?.response?.data?.message || t('template.bundleImportFailed'))
+  } finally {
+    importingBundle.value = false
+    input.value = ''
+  }
 }
 
 </script>
@@ -509,7 +534,7 @@ function hasNativeTools(gene: GeneItem): boolean {
       <template v-else>
 
       <!-- Visibility filter -->
-      <div v-if="viewMode === 'genes' || viewMode === 'templates'" class="flex gap-2 mb-4">
+      <div v-if="viewMode === 'genes' || viewMode === 'templates'" class="flex flex-wrap items-center gap-2 mb-4">
         <Button variant="unstyled" size="unstyled"
           v-for="vis in [
             { value: null, key: 'geneMarket.visAll' },
@@ -527,6 +552,24 @@ function hasNativeTools(gene: GeneItem): boolean {
         >
           {{ t(vis.key) }}
         </Button>
+        <div v-if="viewMode === 'templates'" class="ml-auto">
+          <input
+            ref="bundleFileInput"
+            type="file"
+            accept=".zip"
+            class="hidden"
+            @change="handleBundleImport"
+          />
+          <Button variant="unstyled" size="unstyled"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 transition-colors"
+            :disabled="importingBundle"
+            @click="openBundleImport"
+          >
+            <Loader2 v-if="importingBundle" class="w-3.5 h-3.5 animate-spin" />
+            <Upload v-else class="w-3.5 h-3.5" />
+            {{ t('template.importBundle') }}
+          </Button>
+        </div>
       </div>
 
       <div class="flex flex-wrap gap-3 mb-6">
@@ -766,7 +809,15 @@ function hasNativeTools(gene: GeneItem): boolean {
                     <component :is="resolveIcon(tpl.icon)" class="w-5 h-5 text-primary" />
                   </div>
                   <div class="min-w-0 flex-1">
-                    <span class="font-medium truncate block">{{ tpl.name }}</span>
+                    <div class="flex items-center gap-2 min-w-0">
+                      <span class="font-medium truncate block">{{ tpl.name }}</span>
+                      <span
+                        v-if="tpl.template_type === 'agent_bundle'"
+                        class="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400"
+                      >
+                        {{ t('template.agentBundleBadge') }}
+                      </span>
+                    </div>
                     <p class="text-xs text-muted-foreground line-clamp-2 mt-1">
                       {{ tpl.short_description ?? tpl.description ?? '' }}
                     </p>

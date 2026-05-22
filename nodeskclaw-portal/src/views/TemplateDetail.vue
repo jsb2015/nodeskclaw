@@ -22,6 +22,9 @@ import {
   Dna,
   Pencil,
   Trash2,
+  Upload,
+  KeyRound,
+  FileText,
 } from 'lucide-vue-next'
 import { useGeneStore } from '@/stores/gene'
 import { useToast } from '@/composables/useToast'
@@ -38,6 +41,11 @@ const { t } = useI18n()
 const templateId = computed(() => route.params.id as string)
 const tpl = computed(() => store.currentTemplate)
 const deleting = ref(false)
+const bundleSkills = computed(() => tpl.value?.agent_bundle?.skills ?? [])
+const bundleFiles = computed(() => tpl.value?.agent_bundle?.files ?? [])
+const bundleEnvKeys = computed(() => tpl.value?.agent_bundle?.env_keys ?? [])
+const resourceEntries = computed(() => Object.entries(tpl.value?.resource_recommendation ?? {}))
+const uploadEntries = computed(() => Object.entries(tpl.value?.upload_contract ?? {}))
 
 const iconMap: Record<string, typeof Package> = {
   code: Code,
@@ -148,6 +156,110 @@ async function handleDelete() {
           <div v-if="tpl.description" class="mb-8">
             <h2 class="text-lg font-semibold mb-3">{{ t('template.description') }}</h2>
             <p class="text-muted-foreground whitespace-pre-wrap">{{ tpl.description }}</p>
+          </div>
+
+          <div v-if="tpl.template_type === 'agent_bundle'" class="mb-8 space-y-4">
+            <div class="rounded-lg border border-border bg-card p-4">
+              <div class="flex items-center gap-2 mb-3">
+                <Package class="w-4 h-4 text-primary" />
+                <h2 class="text-lg font-semibold">{{ t('template.agentBundleTitle') }}</h2>
+              </div>
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                <div class="rounded-md bg-muted/40 p-3">
+                  <div class="text-xs text-muted-foreground">{{ t('template.bundleModel') }}</div>
+                  <div class="font-medium truncate">{{ tpl.agent_bundle?.model || '-' }}</div>
+                </div>
+                <div class="rounded-md bg-muted/40 p-3">
+                  <div class="text-xs text-muted-foreground">{{ t('template.bundleSkillCount') }}</div>
+                  <div class="font-medium">{{ bundleSkills.length }}</div>
+                </div>
+                <div class="rounded-md bg-muted/40 p-3">
+                  <div class="text-xs text-muted-foreground">{{ t('template.bundleFileCount') }}</div>
+                  <div class="font-medium">{{ bundleFiles.length }}</div>
+                </div>
+                <div class="rounded-md bg-muted/40 p-3">
+                  <div class="text-xs text-muted-foreground">{{ t('template.bundleEnvCount') }}</div>
+                  <div class="font-medium">{{ bundleEnvKeys.length }}</div>
+                </div>
+              </div>
+
+              <div v-if="bundleSkills.length" class="mt-4">
+                <div class="text-sm font-medium mb-2">{{ t('template.bundleSkills') }}</div>
+                <div class="space-y-2">
+                  <div
+                    v-for="skill in bundleSkills"
+                    :key="skill.slug || skill.name"
+                    class="flex items-center gap-3 rounded-md border border-border px-3 py-2"
+                  >
+                    <Wrench class="w-4 h-4 text-muted-foreground shrink-0" />
+                    <div class="min-w-0 flex-1">
+                      <div class="text-sm font-medium truncate">{{ skill.name }}</div>
+                      <div class="text-xs text-muted-foreground truncate">{{ skill.description }}</div>
+                    </div>
+                    <span class="text-xs text-muted-foreground shrink-0">v{{ skill.version || '1.0.0' }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="bundleFiles.length" class="mt-4">
+                <div class="text-sm font-medium mb-2">{{ t('template.bundleFiles') }}</div>
+                <div class="flex flex-wrap gap-1.5">
+                  <span
+                    v-for="file in bundleFiles.slice(0, 12)"
+                    :key="file"
+                    class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-muted text-muted-foreground"
+                  >
+                    <FileText class="w-3 h-3" />
+                    {{ file }}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="resourceEntries.length || uploadEntries.length || (tpl.secret_refs?.length ?? 0) > 0" class="grid md:grid-cols-3 gap-3">
+              <div v-if="resourceEntries.length" class="rounded-lg border border-border bg-card p-4">
+                <div class="flex items-center gap-2 text-sm font-medium mb-3">
+                  <Cpu class="w-4 h-4 text-blue-400" />
+                  {{ t('template.resourceRecommendation') }}
+                </div>
+                <div class="space-y-1 text-xs">
+                  <div v-for="[key, value] in resourceEntries" :key="key" class="flex justify-between gap-3">
+                    <span class="text-muted-foreground">{{ key }}</span>
+                    <span class="font-mono text-right">{{ value }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="uploadEntries.length" class="rounded-lg border border-border bg-card p-4">
+                <div class="flex items-center gap-2 text-sm font-medium mb-3">
+                  <Upload class="w-4 h-4 text-orange-400" />
+                  {{ t('template.uploadContract') }}
+                </div>
+                <div class="space-y-1 text-xs">
+                  <div v-for="[key, value] in uploadEntries" :key="key" class="flex justify-between gap-3">
+                    <span class="text-muted-foreground">{{ key }}</span>
+                    <span class="font-mono text-right truncate">{{ Array.isArray(value) ? value.join(', ') : value }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="(tpl.secret_refs?.length ?? 0) > 0" class="rounded-lg border border-border bg-card p-4">
+                <div class="flex items-center gap-2 text-sm font-medium mb-3">
+                  <KeyRound class="w-4 h-4 text-amber-400" />
+                  {{ t('template.secretRefs') }}
+                </div>
+                <div class="space-y-1 text-xs">
+                  <div
+                    v-for="ref in tpl.secret_refs"
+                    :key="`${ref.env || ref.env_name}-${ref.secretName || ref.secret_name}`"
+                    class="flex justify-between gap-3"
+                  >
+                    <span class="text-muted-foreground">{{ ref.env || ref.env_name }}</span>
+                    <span class="font-mono text-right">{{ ref.secretName || ref.secret_name || ref.tokenRef || ref.token_ref }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div>

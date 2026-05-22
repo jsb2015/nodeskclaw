@@ -113,6 +113,22 @@ export interface TemplateInfo {
   gene_slugs: string[]
   genes?: GeneRef[]
   items: TemplateItemRef[]
+  template_type: 'basic' | 'agent_bundle'
+  agent_bundle?: {
+    schema_version?: number
+    name?: string
+    slug?: string
+    description?: string
+    model?: string
+    skills?: Array<{ name?: string; slug?: string; version?: string; description?: string; path?: string; tool_count?: number }>
+    files?: string[]
+    env_keys?: string[]
+    has_role_prompt?: boolean
+  } | null
+  resource_recommendation?: Record<string, any> | null
+  upload_contract?: Record<string, any> | null
+  secret_refs?: Array<Record<string, any>>
+  bundle_storage_key?: string
   source_instance_id?: string
   is_published: boolean
   is_featured: boolean
@@ -427,6 +443,22 @@ export const useGeneStore = defineStore('gene', () => {
     return res.data.data
   }
 
+  async function importAgentBundle(file: File, data: {
+    name?: string
+    slug?: string
+    description?: string
+    short_description?: string
+    icon?: string
+  } = {}) {
+    const formData = new FormData()
+    formData.append('file', file)
+    for (const [key, value] of Object.entries(data)) {
+      if (value) formData.append(key, value)
+    }
+    const res = await api.post('/instance-templates/import-agent-bundle', formData)
+    return res.data.data
+  }
+
   async function createTemplateFromInstance(instanceId: string, data: {
     name: string
     slug: string
@@ -528,6 +560,7 @@ export const useGeneStore = defineStore('gene', () => {
     fetchFeaturedTemplates,
     fetchTemplate,
     createTemplate,
+    importAgentBundle,
     createTemplateFromInstance,
     updateTemplate,
     deleteTemplate,

@@ -1,16 +1,20 @@
 """Instance template API routes."""
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.deps import get_current_org, get_db
+from app.core.exceptions import BadRequestError
 from app.schemas.common import ApiResponse, PaginatedResponse, Pagination
 from app.schemas.instance_template import (
+    AgentBundleImportRequest,
     InstanceTemplateCreate,
     InstanceTemplateFromInstance,
     InstanceTemplateInfo,
     InstanceTemplateUpdate,
 )
+from app.services.agent_bundle_service import parse_agent_bundle_zip
 from app.services import instance_template_service as svc
 
 router = APIRouter()
@@ -65,6 +69,47 @@ async def create_template(
 ):
     user, org = org_info
     item = await svc.create_template(db, body, user_id=user.id, org_id=org.id)
+    return ApiResponse(data=item.model_dump(mode="json"))
+
+
+@router.post("/instance-templates/import-agent-bundle", response_model=ApiResponse)
+async def import_agent_bundle(
+    file: UploadFile = File(...),
+    name: str | None = Form(None),
+    slug: str | None = Form(None),
+    description: str | None = Form(None),
+    short_description: str | None = Form(None),
+    icon: str | None = Form(None),
+    db: AsyncSession = Depends(get_db),
+    org_info=Depends(get_current_org),
+):
+    user, org = org_info
+    data = await file.read()
+    manifest = parse_agent_bundle_zip(file.filename or "agent-bundle.zip", data)
+    item = await svc.import_agent_bundle_manifest(
+        db,
+        manifest,
+        user_id=user.id,
+        org_id=org.id,
+        name=name,
+        slug=slug,
+        description=description,
+        short_description=short_description,
+        icon=icon,
+    )
+    return ApiResponse(data=item.model_dump(mode="json"))
+
+
+@router.post("/instance-templates/import-agent-bundle-path", response_model=ApiResponse)
+async def import_agent_bundle_path(
+    body: AgentBundleImportRequest,
+    db: AsyncSession = Depends(get_db),
+    org_info=Depends(get_current_org),
+):
+    if not settings.DEBUG:
+        raise BadRequestError("本地路径导入仅允许在 DEBUG 开发环境使用")
+    user, org = org_info
+    item = await svc.import_agent_bundle_template(db, body, user_id=user.id, org_id=org.id)
     return ApiResponse(data=item.model_dump(mode="json"))
 
 
