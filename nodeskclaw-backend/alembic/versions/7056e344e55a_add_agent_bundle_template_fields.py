@@ -1,11 +1,11 @@
 """add_agent_bundle_template_fields
 
 Revision ID: 7056e344e55a
-Revises: b9f5520c1ffb
+Revises: 4d65cb510bbd
 Create Date: 2026-05-22 16:31:17.737850
 
 """
-from typing import Sequence, Union
+from typing import Sequence
 
 from alembic import op
 import sqlalchemy as sa
@@ -13,9 +13,9 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '7056e344e55a'
-down_revision: Union[str, Sequence[str], None] = 'b9f5520c1ffb'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = '4d65cb510bbd'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
