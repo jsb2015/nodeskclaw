@@ -10,8 +10,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.exceptions import BadRequestError
+from app.api.instance_templates import _read_upload_file_limited
 from app.models.gene import ContentVisibility, Gene, GeneSource
 from app.services.agent_bundle_service import (
+    MAX_FILE_BYTES,
+    MAX_TOTAL_BYTES,
+    MAX_ZIP_BYTES,
+    MAX_ZIP_ENTRIES,
+    ZIP_RATIO_MIN_FILE_BYTES,
     build_bundle_env_vars,
     parse_agent_bundle_dir,
     parse_agent_bundle_zip,
@@ -44,6 +50,41 @@ def make_agent_bundle_zip(extra_path: str, extra_content: str = "payload") -> by
         )
         zf.writestr(extra_path, extra_content)
     return buf.getvalue()
+
+
+def make_base_agent_bundle_zip(
+    entries: list[tuple[str, bytes | str]] | None = None,
+    compression: int = zipfile.ZIP_STORED,
+) -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", compression=compression) as zf:
+        zf.writestr("config.json", json.dumps({"name": "Q", "slug": "q", "model": "mock/q", "env": {}}))
+        zf.writestr("AGENT.md", "# Q\nhello")
+        zf.writestr("SOUL.md", "soul")
+        zf.writestr(
+            "skills/echo/SKILL.md",
+            "---\nname: echo\nversion: 1.0.0\ndescription: Echo skill\npermissions:\n  tools: []\n---\n# Echo\n",
+        )
+        for path, content in entries or []:
+            zf.writestr(path, content)
+    return buf.getvalue()
+
+
+class FakeUploadFile:
+    def __init__(self, data: bytes):
+        self.data = data
+        self.offset = 0
+        self.read_sizes: list[int] = []
+
+    async def read(self, size: int = -1) -> bytes:
+        self.read_sizes.append(size)
+        if self.offset >= len(self.data):
+            return b""
+        if size is None or size < 0:
+            size = len(self.data) - self.offset
+        chunk = self.data[self.offset:self.offset + size]
+        self.offset += len(chunk)
+        return chunk
 
 
 @pytest.fixture
@@ -112,6 +153,104 @@ def test_parse_agent_bundle_zip_rejects_shell_sensitive_paths(unsafe_path: str) 
         parse_agent_bundle_zip("bundle.zip", make_agent_bundle_zip(unsafe_path))
 
     assert "非法路径" in exc.value.message
+
+
+def test_parse_agent_bundle_zip_does_not_call_extractall(monkeypatch) -> None:
+    def fail_extractall(*_args, **_kwargs):
+        raise AssertionError("extractall should not be used")
+
+    monkeypatch.setattr(zipfile.ZipFile, "extractall", fail_extractall)
+
+    manifest = parse_agent_bundle_zip("bundle.zip", make_agent_bundle_zip("README.md", "hello"))
+
+    assert manifest["slug"] == "q"
+    assert manifest["files"]["README.md"] == "hello"
+
+
+def test_parse_agent_bundle_zip_rejects_total_size_before_reading_entries(monkeypatch) -> None:
+    entries = [(f"docs/part-{idx}.txt", "a" * 82_000) for idx in range((MAX_TOTAL_BYTES // 82_000) + 2)]
+    data = make_base_agent_bundle_zip(entries, compression=zipfile.ZIP_DEFLATED)
+    assert len(data) < 100_000
+
+    def fail_open(*_args, **_kwargs):
+        raise AssertionError("oversized bundle should be rejected before reading entries")
+
+    monkeypatch.setattr(zipfile.ZipFile, "open", fail_open)
+
+    with pytest.raises(BadRequestError) as exc:
+        parse_agent_bundle_zip("bundle.zip", data)
+
+    assert "总大小超过限制" in exc.value.message
+
+
+def test_parse_agent_bundle_zip_rejects_single_oversized_file() -> None:
+    data = make_base_agent_bundle_zip([("docs/large.txt", "a" * (MAX_FILE_BYTES + 1))])
+
+    with pytest.raises(BadRequestError) as exc:
+        parse_agent_bundle_zip("bundle.zip", data)
+
+    assert "文件过大" in exc.value.message
+
+
+def test_parse_agent_bundle_zip_rejects_too_many_entries() -> None:
+    entries = [(f"docs/file-{idx}.txt", "x") for idx in range(MAX_ZIP_ENTRIES + 1)]
+    data = make_base_agent_bundle_zip(entries)
+
+    with pytest.raises(BadRequestError) as exc:
+        parse_agent_bundle_zip("bundle.zip", data)
+
+    assert "文件数量超过限制" in exc.value.message
+
+
+def test_parse_agent_bundle_zip_rejects_high_compression_ratio() -> None:
+    data = make_base_agent_bundle_zip(
+        [("docs/compressed.txt", "a" * ZIP_RATIO_MIN_FILE_BYTES)],
+        compression=zipfile.ZIP_DEFLATED,
+    )
+
+    with pytest.raises(BadRequestError) as exc:
+        parse_agent_bundle_zip("bundle.zip", data)
+
+    assert "压缩率异常" in exc.value.message
+
+
+def test_parse_agent_bundle_zip_rejects_duplicate_paths() -> None:
+    with pytest.warns(UserWarning, match="Duplicate name"):
+        data = make_base_agent_bundle_zip([("docs/dup.txt", "one"), ("docs/dup.txt", "two")])
+
+    with pytest.raises(BadRequestError) as exc:
+        parse_agent_bundle_zip("bundle.zip", data)
+
+    assert "重复路径" in exc.value.message
+
+
+def test_parse_agent_bundle_zip_rejects_path_prefix_collision() -> None:
+    data = make_base_agent_bundle_zip([("docs/collision.txt", "one"), ("docs/collision.txt/nested.txt", "two")])
+
+    with pytest.raises(BadRequestError) as exc:
+        parse_agent_bundle_zip("bundle.zip", data)
+
+    assert "路径冲突" in exc.value.message
+
+
+@pytest.mark.asyncio
+async def test_read_upload_file_limited_reads_small_upload_in_chunks() -> None:
+    data = b"a" * (MAX_ZIP_BYTES - 1)
+    file = FakeUploadFile(data)
+
+    assert await _read_upload_file_limited(file) == data
+    assert all(size == 64 * 1024 for size in file.read_sizes[:-1])
+
+
+@pytest.mark.asyncio
+async def test_read_upload_file_limited_rejects_oversized_upload() -> None:
+    data = b"a" * (MAX_ZIP_BYTES + 1)
+    file = FakeUploadFile(data)
+
+    with pytest.raises(BadRequestError) as exc:
+        await _read_upload_file_limited(file)
+
+    assert "上传文件过大" in exc.value.message
 
 
 @pytest.mark.asyncio

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import io
 import posixpath
 import re
 import tempfile
@@ -19,6 +20,11 @@ from app.models.instance import Instance
 REQUIRED_FILES = ("AGENT.md", "SOUL.md", "config.json")
 MAX_FILE_BYTES = 512 * 1024
 MAX_TOTAL_BYTES = 5 * 1024 * 1024
+MAX_ZIP_BYTES = MAX_TOTAL_BYTES + 1024 * 1024
+MAX_ZIP_ENTRIES = 256
+MAX_COMPRESSION_RATIO = 100
+ZIP_RATIO_MIN_FILE_BYTES = 128 * 1024
+ZIP_READ_CHUNK_BYTES = 64 * 1024
 SECRET_KEY_MARKERS = (
     "api_key",
     "apikey",
@@ -183,6 +189,50 @@ def _skill_scripts(skill_dir: Path, root: Path) -> dict[str, str]:
     return scripts
 
 
+def _is_ignored_zip_path(rel: str) -> bool:
+    return any(part == "__MACOSX" for part in rel.split("/"))
+
+
+def _validate_zip_path_collision(rel: str, seen: set[str]) -> None:
+    parts = rel.split("/")
+    for index in range(1, len(parts)):
+        if "/".join(parts[:index]) in seen:
+            raise BadRequestError(f"压缩包包含路径冲突: {rel}")
+    prefix = f"{rel}/"
+    if any(existing.startswith(prefix) for existing in seen):
+        raise BadRequestError(f"压缩包包含路径冲突: {rel}")
+
+
+def _validate_zip_info(info: zipfile.ZipInfo, seen: set[str]) -> str | None:
+    raw_name = info.filename.rstrip("/")
+    if _is_ignored_zip_path(raw_name):
+        return None
+
+    rel = _validate_bundle_rel_path(raw_name, f"压缩包包含非法路径: {info.filename}")
+    if info.is_dir():
+        return None
+    if rel in seen:
+        raise BadRequestError(f"压缩包包含重复路径: {rel}")
+    _validate_zip_path_collision(rel, seen)
+    seen.add(rel)
+    if info.file_size > MAX_FILE_BYTES:
+        raise BadRequestError(f"Agent Bundle 文件过大: {rel}")
+    if info.file_size >= ZIP_RATIO_MIN_FILE_BYTES:
+        if info.compress_size <= 0:
+            raise BadRequestError(f"Agent Bundle 文件压缩率异常: {rel}")
+        if info.file_size / info.compress_size > MAX_COMPRESSION_RATIO:
+            raise BadRequestError(f"Agent Bundle 文件压缩率异常: {rel}")
+    return rel
+
+
+def _safe_zip_target(root: Path, rel: str) -> Path:
+    target = (root / rel).resolve()
+    root_resolved = root.resolve()
+    if root_resolved != target and root_resolved not in target.parents:
+        raise BadRequestError(f"压缩包包含非法路径: {rel}")
+    return target
+
+
 def parse_agent_bundle_dir(bundle_dir: str | Path) -> dict[str, Any]:
     root = Path(bundle_dir).resolve()
     if not root.exists() or not root.is_dir():
@@ -248,22 +298,49 @@ def parse_agent_bundle_dir(bundle_dir: str | Path) -> dict[str, Any]:
 def parse_agent_bundle_zip(filename: str, data: bytes) -> dict[str, Any]:
     if not filename.lower().endswith(".zip"):
         raise BadRequestError("Agent Bundle 上传文件必须是 .zip")
+    if len(data) > MAX_ZIP_BYTES:
+        raise BadRequestError("Agent Bundle 上传文件过大")
     with tempfile.TemporaryDirectory(prefix="agent-bundle-") as tmp:
         tmp_path = Path(tmp)
-        zip_path = tmp_path / "bundle.zip"
-        zip_path.write_bytes(data)
+        bundle_root = tmp_path / "bundle"
+        bundle_root.mkdir()
         try:
-            with zipfile.ZipFile(zip_path) as zf:
+            with zipfile.ZipFile(io.BytesIO(data)) as zf:
+                entries: list[tuple[zipfile.ZipInfo, str]] = []
+                seen: set[str] = set()
+                total = 0
                 for info in zf.infolist():
-                    _validate_bundle_rel_path(
-                        info.filename.rstrip("/"),
-                        f"压缩包包含非法路径: {info.filename}",
-                    )
-                zf.extractall(tmp_path / "bundle")
+                    rel = _validate_zip_info(info, seen)
+                    if rel is None:
+                        continue
+                    entries.append((info, rel))
+                    if len(entries) > MAX_ZIP_ENTRIES:
+                        raise BadRequestError("Agent Bundle 文件数量超过限制")
+                    total += info.file_size
+                    if total > MAX_TOTAL_BYTES:
+                        raise BadRequestError("Agent Bundle 总大小超过限制")
+
+                extracted_total = 0
+                for info, rel in entries:
+                    target = _safe_zip_target(bundle_root, rel)
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    file_total = 0
+                    with zf.open(info) as src, target.open("wb") as dst:
+                        while True:
+                            chunk = src.read(ZIP_READ_CHUNK_BYTES)
+                            if not chunk:
+                                break
+                            file_total += len(chunk)
+                            extracted_total += len(chunk)
+                            if file_total > info.file_size or file_total > MAX_FILE_BYTES:
+                                raise BadRequestError(f"Agent Bundle 文件过大: {rel}")
+                            if extracted_total > MAX_TOTAL_BYTES:
+                                raise BadRequestError("Agent Bundle 总大小超过限制")
+                            dst.write(chunk)
         except zipfile.BadZipFile as exc:
             raise BadRequestError("Agent Bundle 压缩包无法读取") from exc
 
-        extracted = tmp_path / "bundle"
+        extracted = bundle_root
         children = [p for p in extracted.iterdir() if not p.name.startswith(".") and p.name != "__MACOSX"]
         if len(children) == 1 and children[0].is_dir():
             extracted = children[0]

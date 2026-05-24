@@ -14,10 +14,25 @@ from app.schemas.instance_template import (
     InstanceTemplateInfo,
     InstanceTemplateUpdate,
 )
-from app.services.agent_bundle_service import parse_agent_bundle_zip
+from app.services.agent_bundle_service import MAX_ZIP_BYTES, parse_agent_bundle_zip
 from app.services import instance_template_service as svc
 
 router = APIRouter()
+UPLOAD_READ_CHUNK_BYTES = 64 * 1024
+
+
+async def _read_upload_file_limited(file: UploadFile, max_bytes: int = MAX_ZIP_BYTES) -> bytes:
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(UPLOAD_READ_CHUNK_BYTES)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise BadRequestError("Agent Bundle 上传文件过大")
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 @router.get("/instance-templates", response_model=PaginatedResponse)
@@ -84,7 +99,7 @@ async def import_agent_bundle(
     org_info=Depends(get_current_org),
 ):
     user, org = org_info
-    data = await file.read()
+    data = await _read_upload_file_limited(file)
     manifest = parse_agent_bundle_zip(file.filename or "agent-bundle.zip", data)
     item = await svc.import_agent_bundle_manifest(
         db,
