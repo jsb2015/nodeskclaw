@@ -20,7 +20,9 @@ from tests.conftest import TestSessionLocal
 async def _session_or_skip():
     db = TestSessionLocal()
     try:
-        await db.execute(text("SELECT 1"))
+        result = await db.execute(text("SELECT 1"))
+        result.close()
+        await db.rollback()
         return db
     except Exception as exc:
         await db.close()
@@ -28,7 +30,7 @@ async def _session_or_skip():
 
 
 async def _seed_case(db):
-    suffix = uuid4().hex
+    suffix = uuid4().hex[:12]
     org = Organization(id=f"org-{suffix}", name="Org", slug=f"org-{suffix}")
     user = User(id=f"user-{suffix}", name="User", username=f"user-{suffix}", current_org_id=org.id)
     cluster = Cluster(id=f"cluster-{suffix}", name=f"cluster-{suffix}", created_by=user.id, org_id=org.id)
@@ -45,13 +47,11 @@ async def _seed_case(db):
     )
     ws_a = Workspace(id=f"wsa-{suffix}", org_id=org.id, name="A", created_by=user.id)
     ws_b = Workspace(id=f"wsb-{suffix}", org_id=org.id, name="B", created_by=user.id)
+    for model in (org, user, cluster, instance, ws_a, ws_b):
+        db.add(model)
+        await db.flush()
+
     db.add_all([
-        org,
-        user,
-        cluster,
-        instance,
-        ws_a,
-        ws_b,
         WorkspaceAgent(workspace_id=ws_a.id, instance_id=instance.id),
         WorkspaceAgent(workspace_id=ws_b.id, instance_id=instance.id),
         LlmUsageLog(
