@@ -36,6 +36,7 @@ COPY nodeskclaw-backend/ .
 COPY openclaw-channel-nodeskclaw/ ./openclaw-channel-nodeskclaw/
 COPY openclaw-channel-dingtalk/ ./openclaw-channel-dingtalk/
 COPY features.yaml ./features.yaml
+COPY ee/backend/ ./ee/backend/
 
 RUN mkdir -p /app/data
 
