@@ -510,6 +510,10 @@ async def lifespan(app: FastAPI):
     from app.startup.proxy_reconcile import reconcile_proxy_ingresses
     await reconcile_proxy_ingresses(async_session_factory)
 
+    # ── 恢复卡在 deleting 状态的实例删除任务 ─────────────────
+    from app.startup.deletion_reconcile import resume_deleting_instances
+    await resume_deleting_instances(async_session_factory)
+
     # ── 恢复卡在 deploying 状态的实例 ─────────────────
     # 后端重启（如 --reload）会杀死 asyncio.create_task 部署管道，
     # 实例可能永远卡在 deploying。启动时从 K8s 同步真实状态。

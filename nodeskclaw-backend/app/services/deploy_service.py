@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from dataclasses import dataclass
 from urllib.parse import urlparse as _urlparse
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -26,9 +26,7 @@ from app.models.deploy_record import DeployAction, DeployRecord, DeployStatus
 from app.models.instance import Instance, InstanceStatus
 from app.models.user import User
 from app.schemas.deploy import DeployProgress, DeployRequest, PrecheckItem, PrecheckResult
-from app.services.k8s.client_manager import k8s_manager
 from app.services.k8s.event_bus import event_bus
-from app.services.k8s.k8s_client import K8sClient
 from app.services.deploy.factory import get_deploy_adapter
 from app.services.k8s.resource_builder import (
     build_configmap,
@@ -126,9 +124,6 @@ def _unregister_deploy_task(deploy_id: str) -> None:
     _running_tasks.pop(deploy_id, None)
 
 
-_bg_tasks: set[asyncio.Task] = set()
-_PV_CLEANUP_DELAY = 15
-_PV_CLEANUP_RETRIES = 3
 _K8S_NAME_MAX = 63
 _DEPLOY_NAME_MAX = 35
 
@@ -164,26 +159,6 @@ def _truncate_slug_preserve_suffix(slug: str, max_len: int) -> str:
 
     return truncated + suffix
 
-
-def _schedule_pv_cleanup(k8s: K8sClient, namespace: str) -> None:
-    """Namespace 删除后，延迟清理残留的 Released PV。"""
-    async def _run():
-        for attempt in range(1, _PV_CLEANUP_RETRIES + 1):
-            await asyncio.sleep(_PV_CLEANUP_DELAY)
-            try:
-                deleted = await k8s.cleanup_released_pvs(namespace)
-                if deleted:
-                    logger.info("后台清理了 %d 个 Released PV (namespace=%s)", deleted, namespace)
-                return
-            except Exception as e:
-                logger.warning(
-                    "后台清理 PV 第 %d 次失败 (namespace=%s): %s",
-                    attempt, namespace, e,
-                )
-
-    task = asyncio.create_task(_run())
-    _bg_tasks.add(task)
-    task.add_done_callback(_bg_tasks.discard)
 
 async def cancel_deploy(deploy_id: str) -> str:
     """立即取消部署：清理 K8s namespace + 更新 DB + 杀掉后台协程。
@@ -221,70 +196,18 @@ async def cancel_deploy(deploy_id: str) -> str:
         if task and not task.done():
             task.cancel()
 
-        # 3. 清理资源（K8s namespace 或 Docker container）
-        ns_cleaned = False
-        cluster = None
-        try:
-            if instance.compute_provider == "docker":
-                from app.services.runtime.registries.compute_registry import COMPUTE_REGISTRY
-                from app.services.runtime.compute.base import ComputeHandle
-                docker_spec = COMPUTE_REGISTRY.get("docker")
-                if docker_spec and docker_spec.provider:
-                    adv = _json.loads(instance.advanced_config) if instance.advanced_config else {}
-                    handle = ComputeHandle(
-                        provider="docker", instance_id=instance.id,
-                        namespace=instance.namespace, endpoint=instance.ingress_domain or "",
-                        status=instance.status,
-                        extra={"compose_path": adv.get("compose_path", ""), "slug": instance.slug},
-                    )
-                    await docker_spec.provider.destroy_instance(handle)
-                    ns_cleaned = True
-                    logger.info("取消部署，已清理 Docker 容器: %s", instance.slug)
-            else:
-                cluster_result = await db.execute(
-                    select(Cluster).where(
-                        Cluster.id == instance.cluster_id,
-                        Cluster.deleted_at.is_(None),
-                    )
-                )
-                cluster = cluster_result.scalar_one_or_none()
-                if cluster and cluster.is_k8s and cluster.credentials_encrypted:
-                    from app.services.runtime.registries.compute_registry import require_k8s_client
-                    k8s = await require_k8s_client(cluster)
-                    await k8s.core.delete_namespace(instance.namespace)
-                    ns_cleaned = True
-                    logger.info("取消部署，已清理命名空间: %s", instance.namespace)
-                    _schedule_pv_cleanup(k8s, instance.namespace)
-        except Exception:
-            logger.warning("取消部署，清理资源失败: %s", instance.namespace)
-
-        if cluster and cluster.proxy_endpoint:
-            try:
-                from app.services.k8s.client_manager import GATEWAY_NS
-                gateway_api = await k8s_manager.get_gateway_client()
-                gateway_k8s = K8sClient(gateway_api)
-                k8s_name = instance.slug or instance.name
-                await gateway_k8s.networking.delete_namespaced_ingress(
-                    f"proxy-{k8s_name}", GATEWAY_NS,
-                )
-                logger.info("取消部署，已清理网关代理 Ingress: proxy-%s", k8s_name)
-            except Exception:
-                logger.warning("取消部署，清理网关代理 Ingress proxy-%s 失败", instance.slug or instance.name)
-
-        # 4. 更新 DB：标记失败 + 软删除
+        # 3. 更新 DB：标记失败 + 进入 deleting，实际资源清理由 finalizer 处理
         record.status = DeployStatus.failed
         record.message = "用户手动取消部署"
         record.finished_at = datetime.now(timezone.utc)
-        instance.soft_delete()
-        await db.execute(
-            update(DeployRecord)
-            .where(DeployRecord.instance_id == instance.id, DeployRecord.deleted_at.is_(None))
-            .values(deleted_at=func.now())
-        )
+        instance.status = InstanceStatus.deleting
         await db.commit()
         logger.info("取消部署完成: deploy_id=%s, instance=%s", deploy_id, instance.name)
 
-    # 5. 推 SSE 事件通知前端
+    from app.services.instance_service import schedule_instance_deletion_finalizer
+    schedule_instance_deletion_finalizer(instance.id)
+
+    # 4. 推 SSE 事件通知前端
     event_bus.publish(
         "deploy_progress",
         DeployProgress(
@@ -293,12 +216,12 @@ async def cancel_deploy(deploy_id: str) -> str:
             total_steps=len(DEPLOY_STEPS_BASE),
             current_step="已取消",
             status="failed",
-            message=f"部署已取消{'，命名空间已清理' if ns_cleaned else ''}",
+            message="部署已取消，资源清理已开始",
             percent=100,
         ).model_dump(),
     )
 
-    return "已取消" + ("，命名空间已清理" if ns_cleaned else "")
+    return "已取消，资源清理已开始"
 
 
 DEPLOY_STEPS_BASE = [
@@ -891,7 +814,7 @@ async def _execute_via_compute_provider(ctx: _DeployContext) -> None:
 
 
 async def _mark_deploy_failed(ctx: _DeployContext, message: str) -> None:
-    """标记部署记录为失败并软删除实例。"""
+    """标记部署记录为失败，并把实例交给删除 finalizer 清理。"""
     from app.core.deps import async_session_factory
 
     try:
@@ -914,13 +837,11 @@ async def _mark_deploy_failed(ctx: _DeployContext, message: str) -> None:
                 )
             )
             instance = inst_result.scalar_one()
-            instance.soft_delete()
-            await db.execute(
-                update(DeployRecord)
-                .where(DeployRecord.instance_id == ctx.instance_id, DeployRecord.deleted_at.is_(None))
-                .values(deleted_at=func.now())
-            )
+            instance.status = InstanceStatus.deleting
             await db.commit()
+
+        from app.services.instance_service import schedule_instance_deletion_finalizer
+        schedule_instance_deletion_finalizer(ctx.instance_id)
     except Exception:
         logger.exception("标记部署失败状态时出错")
 
@@ -1318,32 +1239,16 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
                     f"{c['type']}: {c.get('message', '')}" for c in conditions
                 ) or "Deployment 未在 120 秒内就绪"
 
-                # 清理 K8s namespace（级联删除所有资源）
-                ns_cleaned = False
-                try:
-                    await k8s.core.delete_namespace(ctx.namespace)
-                    ns_cleaned = True
-                    logger.info("部署失败，已清理命名空间: %s", ctx.namespace)
-                    _schedule_pv_cleanup(k8s, ctx.namespace)
-                except Exception:
-                    logger.warning("清理命名空间 %s 失败", ctx.namespace)
-
-                await adapter.cleanup_proxy(ctx)
-
                 record.status = DeployStatus.failed
                 record.message = f"就绪超时: {cond_msg}"[:500]
                 record.finished_at = datetime.now(timezone.utc)
-
-                instance.soft_delete()
-                await db.execute(
-                    update(DeployRecord)
-                    .where(DeployRecord.instance_id == ctx.instance_id, DeployRecord.deleted_at.is_(None))
-                    .values(deleted_at=func.now())
-                )
+                instance.status = InstanceStatus.deleting
                 await db.commit()
 
-                cleanup_hint = "，命名空间已清理" if ns_cleaned else ""
-                _publish(total, "失败", status="failed", message=f"Pod 未就绪: {cond_msg}{cleanup_hint}"[:200])
+                from app.services.instance_service import schedule_instance_deletion_finalizer
+                schedule_instance_deletion_finalizer(ctx.instance_id)
+
+                _publish(total, "失败", status="failed", message=f"Pod 未就绪: {cond_msg}，资源清理已开始"[:200])
                 logger.warning("部署超时未就绪: %s (namespace=%s) — %s", ctx.name, ctx.namespace, cond_msg)
 
         except asyncio.CancelledError:
@@ -1352,18 +1257,6 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
 
         except Exception as e:
             logger.exception("部署失败: %s", ctx.name)
-            ns_cleaned = False
-            try:
-                cleanup_k8s = await require_k8s_client(cluster)
-                await cleanup_k8s.core.delete_namespace(ctx.namespace)
-                ns_cleaned = True
-                logger.info("部署异常，已清理命名空间: %s", ctx.namespace)
-                _schedule_pv_cleanup(cleanup_k8s, ctx.namespace)
-            except Exception:
-                logger.warning("清理命名空间 %s 失败", ctx.namespace)
-
-            await adapter.cleanup_proxy(ctx)
-
             try:
                 rec_result = await db.execute(
                     select(DeployRecord).where(
@@ -1384,18 +1277,15 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
                 )
                 instance = inst_result.scalar_one()
 
-                instance.soft_delete()
-                await db.execute(
-                    update(DeployRecord)
-                    .where(DeployRecord.instance_id == ctx.instance_id, DeployRecord.deleted_at.is_(None))
-                    .values(deleted_at=func.now())
-                )
+                instance.status = InstanceStatus.deleting
                 await db.commit()
+
+                from app.services.instance_service import schedule_instance_deletion_finalizer
+                schedule_instance_deletion_finalizer(ctx.instance_id)
             except Exception:
                 logger.exception("更新部署失败状态时出错")
 
-            cleanup_hint = "，命名空间已清理" if ns_cleaned else ""
-            _publish(total, "失败", status="failed", message=f"{str(e)[:180]}{cleanup_hint}")
+            _publish(total, "失败", status="failed", message=f"{str(e)[:170]}，资源清理已开始")
 
 
 # ── Rebuild ────────────────────────────────────────────────

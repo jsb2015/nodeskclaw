@@ -51,6 +51,8 @@ def _fire_task(coro: Coroutine) -> asyncio.Task:
 
 _PV_CLEANUP_DELAY = 15
 _PV_CLEANUP_RETRIES = 3
+_DELETE_FINALIZER_DELAY = 10
+_DELETE_FINALIZER_RETRIES = 30
 
 
 async def _deferred_pv_cleanup(k8s: K8sClient, namespace: str) -> None:
@@ -107,6 +109,216 @@ def _get_docker_provider():
         return spec.provider
     from app.services.runtime.compute.docker_provider import DockerComputeProvider
     return DockerComputeProvider()
+
+
+def _get_compute_provider(compute_provider: str):
+    from app.services.runtime.registries.compute_registry import COMPUTE_REGISTRY
+    spec = COMPUTE_REGISTRY.get(compute_provider)
+    return spec.provider if spec and spec.provider else None
+
+
+def _is_k8s_not_found(exc: Exception) -> bool:
+    return getattr(exc, "status", None) == 404
+
+
+async def _get_k8s_client_for_cluster(cluster: Cluster) -> K8sClient:
+    from app.services.runtime.registries.compute_registry import require_k8s_client
+    return await require_k8s_client(cluster)
+
+
+async def _get_gateway_k8s_client() -> K8sClient:
+    gateway_api = await k8s_manager.get_gateway_client()
+    return K8sClient(gateway_api)
+
+
+async def _delete_namespace_and_check_absent(k8s: K8sClient, namespace: str) -> bool:
+    try:
+        await k8s.core.delete_namespace(namespace)
+        logger.info("已请求删除命名空间 %s", namespace)
+    except Exception as e:
+        if not _is_k8s_not_found(e):
+            raise
+
+    try:
+        await k8s.core.read_namespace(namespace)
+        return False
+    except Exception as e:
+        if _is_k8s_not_found(e):
+            return True
+        raise
+
+
+async def _delete_proxy_ingress_and_check_absent(gateway_k8s: K8sClient, proxy_name: str) -> bool:
+    from app.services.k8s.client_manager import GATEWAY_NS
+
+    try:
+        await gateway_k8s.networking.delete_namespaced_ingress(proxy_name, GATEWAY_NS)
+        logger.info("已请求清理网关代理 Ingress: %s", proxy_name)
+    except Exception as e:
+        if not _is_k8s_not_found(e):
+            raise
+
+    try:
+        await gateway_k8s.networking.read_namespaced_ingress(proxy_name, GATEWAY_NS)
+        return False
+    except Exception as e:
+        if _is_k8s_not_found(e):
+            return True
+        raise
+
+
+async def _soft_delete_instance_records(instance: Instance, db: AsyncSession) -> None:
+    instance.soft_delete()
+    await db.execute(
+        update(DeployRecord)
+        .where(DeployRecord.instance_id == instance.id, DeployRecord.deleted_at.is_(None))
+        .values(deleted_at=func.now())
+    )
+
+    from app.models.backup import InstanceBackup
+    backup_result = await db.execute(
+        select(InstanceBackup.storage_key).where(
+            InstanceBackup.instance_id == instance.id,
+            InstanceBackup.deleted_at.is_(None),
+            InstanceBackup.storage_key.isnot(None),
+        )
+    )
+    s3_keys = [row[0] for row in backup_result.all()]
+    await db.execute(
+        update(InstanceBackup)
+        .where(InstanceBackup.instance_id == instance.id, InstanceBackup.deleted_at.is_(None))
+        .values(deleted_at=func.now())
+    )
+
+    from app.models.instance_member import InstanceMember
+    await db.execute(
+        update(InstanceMember)
+        .where(InstanceMember.instance_id == instance.id, InstanceMember.deleted_at.is_(None))
+        .values(deleted_at=func.now())
+    )
+    await db.commit()
+
+    if s3_keys:
+        _fire_task(_cleanup_backup_s3_objects(s3_keys))
+
+
+async def _destroy_non_k8s_instance(instance: Instance) -> bool:
+    provider = (
+        _get_docker_provider()
+        if instance.compute_provider == "docker"
+        else _get_compute_provider(instance.compute_provider)
+    )
+    if provider is None or not hasattr(provider, "destroy_instance"):
+        logger.warning(
+            "实例 %s 使用的 compute_provider=%s 没有可用销毁器",
+            instance.id, instance.compute_provider,
+        )
+        return False
+
+    handle = _build_docker_handle(instance)
+    handle.provider = instance.compute_provider
+    await provider.destroy_instance(handle)
+    logger.info("已销毁 %s 运行资源（实例 %s）", instance.compute_provider, instance.name)
+    return True
+
+
+async def mark_instance_deleting(instance: Instance, db: AsyncSession) -> None:
+    instance.status = InstanceStatus.deleting
+    await db.commit()
+    schedule_instance_deletion_finalizer(instance.id)
+
+
+def schedule_instance_deletion_finalizer(instance_id: str) -> asyncio.Task:
+    return _fire_task(_run_instance_deletion_finalizer(instance_id))
+
+
+async def _run_instance_deletion_finalizer(instance_id: str) -> None:
+    from app.core.deps import async_session_factory
+
+    for attempt in range(1, _DELETE_FINALIZER_RETRIES + 1):
+        try:
+            async with async_session_factory() as db:
+                if await finalize_instance_deletion_once(instance_id, db):
+                    return
+        except Exception:
+            logger.warning(
+                "实例删除 finalizer 第 %d 次失败: instance_id=%s",
+                attempt, instance_id, exc_info=True,
+            )
+        await asyncio.sleep(_DELETE_FINALIZER_DELAY)
+
+    logger.error(
+        "实例删除 finalizer 多次重试后仍未完成: instance_id=%s retries=%d",
+        instance_id, _DELETE_FINALIZER_RETRIES,
+    )
+
+
+async def finalize_instance_deletion_once(instance_id: str, db: AsyncSession) -> bool:
+    result = await db.execute(
+        select(Instance).where(
+            Instance.id == instance_id,
+            Instance.deleted_at.is_(None),
+        )
+    )
+    instance = result.scalar_one_or_none()
+    if instance is None:
+        return True
+
+    if instance.status != InstanceStatus.deleting:
+        instance.status = InstanceStatus.deleting
+        await db.commit()
+
+    if instance.compute_provider != "k8s":
+        try:
+            if not await _destroy_non_k8s_instance(instance):
+                return False
+        except Exception:
+            logger.warning("销毁实例 %s 的运行资源失败", instance.name, exc_info=True)
+            return False
+
+        await _soft_delete_instance_records(instance, db)
+        logger.info("实例 %s 删除完成，DB 已软删除", instance.name)
+        return True
+
+    cluster_result = await db.execute(
+        select(Cluster).where(Cluster.id == instance.cluster_id, Cluster.deleted_at.is_(None))
+    )
+    cluster = cluster_result.scalar_one_or_none()
+    if not cluster or not cluster.is_k8s or not cluster.credentials_encrypted:
+        logger.warning(
+            "实例 %s 删除等待中：集群不存在或缺少 K8s 连接凭证",
+            instance.name,
+        )
+        return False
+
+    try:
+        k8s = await _get_k8s_client_for_cluster(cluster)
+        namespace_absent = await _delete_namespace_and_check_absent(k8s, instance.namespace)
+    except Exception:
+        logger.warning("清理实例 %s 的命名空间失败", instance.name, exc_info=True)
+        return False
+
+    proxy_absent = True
+    if cluster.proxy_endpoint:
+        proxy_name = f"proxy-{_k8s_name(instance)}"
+        try:
+            gateway_k8s = await _get_gateway_k8s_client()
+            proxy_absent = await _delete_proxy_ingress_and_check_absent(gateway_k8s, proxy_name)
+        except Exception:
+            logger.warning("清理网关代理 Ingress %s 失败", proxy_name, exc_info=True)
+            proxy_absent = False
+
+    if not namespace_absent or not proxy_absent:
+        logger.info(
+            "实例 %s 删除等待中：namespace_absent=%s proxy_absent=%s",
+            instance.name, namespace_absent, proxy_absent,
+        )
+        return False
+
+    _fire_task(_deferred_pv_cleanup(k8s, instance.namespace))
+    await _soft_delete_instance_records(instance, db)
+    logger.info("实例 %s 删除完成，K8s 资源确认不存在，DB 已软删除", instance.name)
+    return True
 
 
 async def _in_deploy_grace(instance_id: str, db: AsyncSession, grace_seconds: int = 60) -> bool:
@@ -404,7 +616,13 @@ async def get_instance_detail(instance_id: str, db: AsyncSession, org_id: str | 
 
 
 async def delete_instance(instance_id: str, db: AsyncSession, delete_k8s: bool = True, org_id: str | None = None):
-    """逻辑删除实例：标记 deleted_at，从 K8s 删除整个命名空间（级联删除所有资源）。"""
+    """请求删除实例，最终清理完成后再逻辑删除 DB 记录。"""
+    if not delete_k8s:
+        raise BadRequestError(
+            message="删除实例必须同步清理运行资源",
+            message_key="errors.instance.delete_k8s_required",
+        )
+
     instance = await get_instance(instance_id, db, org_id)
 
     wa_count_result = await db.execute(
@@ -419,73 +637,7 @@ async def delete_instance(instance_id: str, db: AsyncSession, delete_k8s: bool =
             message_key="errors.instance.still_in_workspace",
         )
 
-    if delete_k8s:
-        if instance.compute_provider == "docker":
-            try:
-                provider = _get_docker_provider()
-                handle = _build_docker_handle(instance)
-                await provider.destroy_instance(handle)
-                logger.info("已销毁 Docker 容器（实例 %s）", instance.name)
-            except Exception as e:
-                logger.warning("删除实例 %s 的 Docker 资源失败: %s", instance.name, e)
-        else:
-            cluster_result = await db.execute(
-                select(Cluster).where(Cluster.id == instance.cluster_id, Cluster.deleted_at.is_(None))
-            )
-            cluster = cluster_result.scalar_one_or_none()
-            if cluster and cluster.is_k8s and cluster.credentials_encrypted:
-                try:
-                    from app.services.runtime.registries.compute_registry import require_k8s_client
-                    k8s = await require_k8s_client(cluster)
-                    ns = instance.namespace
-                    try:
-                        await k8s.core.delete_namespace(ns)
-                        logger.info("已删除命名空间 %s（实例 %s）", ns, instance.name)
-                    except Exception:
-                        logger.warning("删除命名空间 %s 失败，可能已不存在", ns)
-                    _fire_task(_deferred_pv_cleanup(k8s, ns))
-                except Exception as e:
-                    logger.warning("删除实例 %s 的 K8s 资源失败: %s", instance.name, e)
-
-                if cluster and cluster.proxy_endpoint:
-                    try:
-                        from app.services.k8s.client_manager import GATEWAY_NS
-                        gateway_api = await k8s_manager.get_gateway_client()
-                        gateway_k8s = K8sClient(gateway_api)
-                        inst_name = _k8s_name(instance)
-                        await gateway_k8s.networking.delete_namespaced_ingress(
-                            f"proxy-{inst_name}", GATEWAY_NS,
-                        )
-                        logger.info("已清理网关代理 Ingress: proxy-%s", inst_name)
-                    except Exception:
-                        logger.warning("清理网关代理 Ingress proxy-%s 失败", _k8s_name(instance))
-
-    # 逻辑删除实例
-    instance.soft_delete()
-    # 级联逻辑删除关联的部署记录
-    await db.execute(
-        update(DeployRecord)
-        .where(DeployRecord.instance_id == instance.id, DeployRecord.deleted_at.is_(None))
-        .values(deleted_at=func.now())
-    )
-    # 级联逻辑删除关联的备份记录并异步清理 S3 对象
-    from app.models.backup import InstanceBackup
-    backup_result = await db.execute(
-        select(InstanceBackup.storage_key).where(
-            InstanceBackup.instance_id == instance.id,
-            InstanceBackup.deleted_at.is_(None),
-            InstanceBackup.storage_key.isnot(None),
-        )
-    )
-    s3_keys = [row[0] for row in backup_result.all()]
-    await db.execute(
-        update(InstanceBackup)
-        .where(InstanceBackup.instance_id == instance.id, InstanceBackup.deleted_at.is_(None))
-        .values(deleted_at=func.now())
-    )
-    await db.commit()
-    if s3_keys:
-        _fire_task(_cleanup_backup_s3_objects(s3_keys))
+    await mark_instance_deleting(instance, db)
 
 
 async def scale_instance(instance_id: str, replicas: int, db: AsyncSession, org_id: str | None = None):

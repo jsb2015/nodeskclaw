@@ -112,8 +112,8 @@ async def delete_instance(
     """删除实例。"""
     _current_user, org = org_ctx
     await instance_service.delete_instance(instance_id, db, delete_k8s, org.id)
-    await hooks.emit("operation_audit", action="instance.deleted", target_type="instance", target_id=instance_id, actor_id=_current_user.id, org_id=_current_user.current_org_id, details={"delete_k8s": delete_k8s, "source": "admin"})
-    return ApiResponse(message="实例已删除")
+    await hooks.emit("operation_audit", action="instance.delete_requested", target_type="instance", target_id=instance_id, actor_id=_current_user.id, org_id=_current_user.current_org_id, details={"delete_k8s": delete_k8s, "source": "admin"})
+    return ApiResponse(message="实例删除已开始")
 
 
 class ScaleBody(BaseModel):

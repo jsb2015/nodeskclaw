@@ -139,9 +139,8 @@ async def delete_instance(
         instance_id, current_user, InstanceRole.admin, db
     )
     await instance_service.delete_instance(instance_id, db, delete_k8s)
-    await hooks.emit("operation_audit", action="instance.deleted", target_type="instance", target_id=instance_id, actor_id=current_user.id, org_id=current_user.current_org_id, details={"delete_k8s": delete_k8s, "source": "portal"})
-    await _cascade_soft_delete_members(instance_id, db)
-    return ApiResponse(message="实例已删除")
+    await hooks.emit("operation_audit", action="instance.delete_requested", target_type="instance", target_id=instance_id, actor_id=current_user.id, org_id=current_user.current_org_id, details={"delete_k8s": delete_k8s, "source": "portal"})
+    return ApiResponse(message="实例删除已开始")
 
 
 @router.post("/{instance_id}/scale", response_model=ApiResponse)
@@ -438,16 +437,3 @@ async def clone_instance(
     )
     await hooks.emit("operation_audit", action="instance.cloned", target_type="instance", target_id=instance_id, actor_id=current_user.id, org_id=current_user.current_org_id, details={"new_instance_id": new_id, "deploy_id": deploy_id, "source": "portal"})
     return ApiResponse(data={"instance_id": new_id, "deploy_id": deploy_id})
-
-
-async def _cascade_soft_delete_members(instance_id: str, db: AsyncSession) -> None:
-    from sqlalchemy import func, update
-    await db.execute(
-        update(InstanceMember)
-        .where(
-            InstanceMember.instance_id == instance_id,
-            InstanceMember.deleted_at.is_(None),
-        )
-        .values(deleted_at=func.now())
-    )
-    await db.commit()
