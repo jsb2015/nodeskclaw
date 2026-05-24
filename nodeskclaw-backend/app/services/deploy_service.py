@@ -165,6 +165,131 @@ async def _restore_agent_bundle_with_retry(
     raise last_error
 
 
+def _post_ready_step_names(ctx: "_DeployContext") -> list[str]:
+    steps: list[str] = []
+    if ctx.should_sync_runtime_llm_config:
+        steps.append("应用实例配置")
+    if ctx.template_agent_bundle_manifest:
+        steps.append("恢复 AI 员工模板包")
+    if ctx.template_gene_slugs:
+        steps.append("安装模板技能基因")
+    return steps
+
+
+async def _run_post_ready_instance_steps(
+    ctx: "_DeployContext",
+    instance: Instance,
+    db: AsyncSession,
+    *,
+    start_step: int,
+    publish,
+) -> str:
+    llm_sync_warning = ""
+    current_step = start_step
+    if ctx.runtime in {"openclaw", "hermes"}:
+        from app.services.llm_config_service import (
+            ensure_openclaw_gateway_config,
+            sync_runtime_llm_config,
+        )
+
+        try:
+            if ctx.should_sync_runtime_llm_config:
+                config_step = current_step
+                current_step += 1
+                publish(config_step, "应用实例配置")
+                if ctx.runtime == "openclaw":
+                    await ensure_openclaw_gateway_config(instance, db)
+                await sync_runtime_llm_config(instance, db)
+                publish(config_step, "应用实例配置", status="success")
+            elif ctx.runtime == "openclaw":
+                await ensure_openclaw_gateway_config(instance, db)
+        except Exception as e:
+            logger.warning(
+                "LLM 配置同步失败（非致命） [deploy_id=%s, instance_id=%s]: %s",
+                ctx.record_id, ctx.instance_id, e, exc_info=True,
+            )
+            llm_sync_warning = "（LLM 配置同步失败，可在管理后台手动重试）"
+            if ctx.should_sync_runtime_llm_config:
+                publish(config_step, "应用实例配置", status="failed", message=str(e)[:200])
+
+    bundle_restore_warning = ""
+    if ctx.template_agent_bundle_manifest:
+        bundle_step = current_step
+        current_step += 1
+        publish(bundle_step, "恢复 AI 员工模板包")
+        try:
+            await _restore_agent_bundle_with_retry(instance, ctx.template_agent_bundle_manifest, db)
+            publish(bundle_step, "恢复 AI 员工模板包", status="success")
+        except Exception as bundle_err:
+            logger.warning(
+                "AI 员工模板包恢复失败（已重试） [deploy_id=%s, instance_id=%s]: %s",
+                ctx.record_id,
+                ctx.instance_id,
+                bundle_err,
+                exc_info=True,
+            )
+            bundle_restore_warning = "（AI 员工模板包恢复失败，可在实例详情中重试或检查模板）"
+            publish(bundle_step, "恢复 AI 员工模板包", status="failed", message=str(bundle_err)[:200])
+
+    gene_install_warning = ""
+    if ctx.template_gene_slugs:
+        gene_step = current_step
+        publish(gene_step, "安装模板技能基因")
+        failed_genes: list[str] = []
+        max_retries = 2
+        from app.services.gene_service import install_gene_prerestart
+        for idx, gene_slug in enumerate(ctx.template_gene_slugs):
+            installed = False
+            for attempt in range(max_retries + 1):
+                try:
+                    await install_gene_prerestart(ctx.instance_id, gene_slug)
+                    installed = True
+                    break
+                except Exception as ge:
+                    if attempt < max_retries:
+                        logger.warning(
+                            "模板基因安装失败（第 %d 次重试）: slug=%s err=%s",
+                            attempt + 1, gene_slug, ge,
+                        )
+                        await asyncio.sleep(2)
+                    else:
+                        logger.warning(
+                            "模板基因安装失败（已重试 %d 次）: slug=%s err=%s",
+                            max_retries, gene_slug, ge,
+                        )
+                        failed_genes.append(gene_slug)
+            if installed and idx < len(ctx.template_gene_slugs) - 1:
+                await asyncio.sleep(1)
+
+        installed_count = len(ctx.template_gene_slugs) - len(failed_genes)
+        if installed_count > 0:
+            try:
+                from app.services.instance_service import restart_instance
+                await restart_instance(ctx.instance_id, db)
+            except Exception as restart_err:
+                logger.warning("模板基因安装后重启失败: %s", restart_err)
+
+        if failed_genes:
+            gene_install_warning = f"（{len(failed_genes)} 个基因安装失败: {', '.join(failed_genes)}）"
+            publish(
+                gene_step,
+                "安装模板技能基因",
+                status="success",
+                message=f"{installed_count}/{len(ctx.template_gene_slugs)} 安装成功",
+            )
+        else:
+            publish(gene_step, "安装模板技能基因", status="success")
+
+        if ctx.template_id:
+            try:
+                from app.services.instance_template_service import increment_use_count
+                await increment_use_count(db, ctx.template_id)
+            except Exception:
+                logger.warning("Failed to increment template use count for %s", ctx.template_id, exc_info=True)
+
+    return f"部署成功{llm_sync_warning}{bundle_restore_warning}{gene_install_warning}"
+
+
 # 正在运行的部署任务引用（deploy_id -> asyncio.Task）
 _running_tasks: dict[str, asyncio.Task] = {}
 
@@ -756,13 +881,7 @@ async def execute_deploy_pipeline(ctx: _DeployContext) -> None:
     from app.core.deps import async_session_factory
     from app.services.config_service import get_config
 
-    steps = list(DEPLOY_STEPS_BASE)
-    if ctx.should_sync_runtime_llm_config:
-        steps.append("应用实例配置")
-    if ctx.template_agent_bundle_manifest:
-        steps.append("恢复 AI 员工模板包")
-    if ctx.template_gene_slugs:
-        steps.append("安装模板技能基因")
+    steps = [*DEPLOY_STEPS_BASE, *_post_ready_step_names(ctx)]
     total = len(steps)
 
     try:
@@ -788,8 +907,8 @@ async def _execute_via_compute_provider(ctx: _DeployContext) -> None:
         return
 
     provider = spec.provider
-    total = len(DOCKER_DEPLOY_STEPS)
-    step_names = list(DOCKER_DEPLOY_STEPS)
+    step_names = [*DOCKER_DEPLOY_STEPS[:-1], *_post_ready_step_names(ctx), DOCKER_DEPLOY_STEPS[-1]]
+    total = len(step_names)
 
     env_vars = dict(ctx.env_vars or {})
     if "DOCKER_IMAGE" not in env_vars:
@@ -936,31 +1055,32 @@ async def _execute_via_compute_provider(ctx: _DeployContext) -> None:
 
         await db.commit()
 
-        if ctx.runtime in {"openclaw", "hermes"}:
-            from app.services.llm_config_service import (
-                ensure_openclaw_gateway_config,
-                sync_runtime_llm_config,
+        def _publish(step: int, name: str, status: str = "in_progress", message: str | None = None) -> None:
+            event_bus.publish(
+                "deploy_progress",
+                DeployProgress(
+                    deploy_id=ctx.record_id, step=step, total_steps=total,
+                    current_step=name, status=status,
+                    message=message, percent=min(90, 65 + step * 5),
+                ).model_dump(),
             )
-            try:
-                if ctx.runtime == "openclaw":
-                    await ensure_openclaw_gateway_config(instance, db)
-                if ctx.should_sync_runtime_llm_config:
-                    await sync_runtime_llm_config(instance, db)
-            except Exception as e:
-                logger.warning(
-                    "Docker 部署后注入配置失败（非致命） [deploy_id=%s, instance_id=%s]: %s",
-                    ctx.record_id,
-                    ctx.instance_id,
-                    e,
-                    exc_info=True,
-                )
+
+        success_msg = await _run_post_ready_instance_steps(
+            ctx,
+            instance,
+            db,
+            start_step=len(DOCKER_DEPLOY_STEPS),
+            publish=_publish,
+        )
+        record.message = success_msg
+        await db.commit()
 
     event_bus.publish(
         "deploy_progress",
         DeployProgress(
             deploy_id=ctx.record_id, step=total, total_steps=total,
             current_step=step_names[-1], status="success",
-            message="部署成功", percent=100,
+            message=success_msg, percent=100,
         ).model_dump(),
     )
 
@@ -1303,109 +1423,13 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
                 instance.available_replicas = dep_status.get("available_replicas", 0)
                 await db.commit()
 
-                llm_sync_warning = ""
-                optional_step = len(DEPLOY_STEPS_BASE) + 1
-                if ctx.runtime in {"openclaw", "hermes"}:
-                    from app.services.llm_config_service import (
-                        ensure_openclaw_gateway_config,
-                        sync_runtime_llm_config,
-                    )
-
-                    try:
-                        if ctx.should_sync_runtime_llm_config:
-                            config_step = optional_step
-                            optional_step += 1
-                            _publish(config_step, "应用实例配置")
-                            if ctx.runtime == "openclaw":
-                                await ensure_openclaw_gateway_config(instance, db)
-                            await sync_runtime_llm_config(instance, db)
-                            _publish(config_step, "应用实例配置", status="success")
-                        else:
-                            if ctx.runtime == "openclaw":
-                                await ensure_openclaw_gateway_config(instance, db)
-                    except Exception as e:
-                        logger.warning(
-                            "LLM 配置同步失败（非致命） [deploy_id=%s, instance_id=%s]: %s",
-                            ctx.record_id, ctx.instance_id, e, exc_info=True,
-                        )
-                        llm_sync_warning = "（LLM 配置同步失败，可在管理后台手动重试）"
-                        if ctx.should_sync_runtime_llm_config:
-                            _publish(config_step, "应用实例配置", status="failed",
-                                     message=str(e)[:200])
-
-                bundle_restore_warning = ""
-                if ctx.template_agent_bundle_manifest:
-                    bundle_step = optional_step
-                    optional_step += 1
-                    _publish(bundle_step, "恢复 AI 员工模板包")
-                    try:
-                        await _restore_agent_bundle_with_retry(instance, ctx.template_agent_bundle_manifest, db)
-                        _publish(bundle_step, "恢复 AI 员工模板包", status="success")
-                    except Exception as bundle_err:
-                        logger.warning(
-                            "AI 员工模板包恢复失败（已重试） [deploy_id=%s, instance_id=%s]: %s",
-                            ctx.record_id,
-                            ctx.instance_id,
-                            bundle_err,
-                            exc_info=True,
-                        )
-                        bundle_restore_warning = "（AI 员工模板包恢复失败，可在实例详情中重试或检查模板）"
-                        _publish(bundle_step, "恢复 AI 员工模板包", status="failed",
-                                 message=str(bundle_err)[:200])
-
-                gene_install_warning = ""
-                if ctx.template_gene_slugs:
-                    gene_step = len(steps)
-                    _publish(gene_step, "安装模板技能基因")
-                    failed_genes: list[str] = []
-                    max_retries = 2
-                    from app.services.gene_service import install_gene_prerestart
-                    for idx, gene_slug in enumerate(ctx.template_gene_slugs):
-                        installed = False
-                        for attempt in range(max_retries + 1):
-                            try:
-                                await install_gene_prerestart(ctx.instance_id, gene_slug)
-                                installed = True
-                                break
-                            except Exception as ge:
-                                if attempt < max_retries:
-                                    logger.warning(
-                                        "模板基因安装失败（第 %d 次重试）: slug=%s err=%s",
-                                        attempt + 1, gene_slug, ge,
-                                    )
-                                    await asyncio.sleep(2)
-                                else:
-                                    logger.warning(
-                                        "模板基因安装失败（已重试 %d 次）: slug=%s err=%s",
-                                        max_retries, gene_slug, ge,
-                                    )
-                                    failed_genes.append(gene_slug)
-                        if installed and idx < len(ctx.template_gene_slugs) - 1:
-                            await asyncio.sleep(1)
-
-                    installed_count = len(ctx.template_gene_slugs) - len(failed_genes)
-                    if installed_count > 0:
-                        try:
-                            from app.services.instance_service import restart_instance
-                            await restart_instance(ctx.instance_id, db)
-                        except Exception as restart_err:
-                            logger.warning("模板基因安装后重启失败: %s", restart_err)
-
-                    if failed_genes:
-                        gene_install_warning = f"（{len(failed_genes)} 个基因安装失败: {', '.join(failed_genes)}）"
-                        _publish(gene_step, "安装模板技能基因", status="success",
-                                 message=f"{len(ctx.template_gene_slugs) - len(failed_genes)}/{len(ctx.template_gene_slugs)} 安装成功")
-                    else:
-                        _publish(gene_step, "安装模板技能基因", status="success")
-
-                    if ctx.template_id:
-                        try:
-                            from app.services.instance_template_service import increment_use_count
-                            await increment_use_count(db, ctx.template_id)
-                        except Exception:
-                            logger.warning("Failed to increment template use count for %s", ctx.template_id, exc_info=True)
-
-                success_msg = f"部署成功{llm_sync_warning}{bundle_restore_warning}{gene_install_warning}"
+                success_msg = await _run_post_ready_instance_steps(
+                    ctx,
+                    instance,
+                    db,
+                    start_step=len(DEPLOY_STEPS_BASE) + 1,
+                    publish=_publish,
+                )
                 record.message = success_msg
                 await db.commit()
                 _publish(total, "完成", status="success", message=success_msg)
