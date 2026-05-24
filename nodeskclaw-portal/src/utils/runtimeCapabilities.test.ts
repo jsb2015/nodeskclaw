@@ -72,4 +72,22 @@ describe('runtimeCapabilities', () => {
     expect(caps.evolutionLog).toBe(false)
     expect(caps.dataRoot).toBe('.hermes')
   })
+
+  it('derives file browsing root from config path before container path', () => {
+    setRuntimeEngines([
+      {
+        runtime_id: 'custom-runtime',
+        data_dir_container_path: '/app/data',
+        config_rel_path: '.custom/config.yaml',
+        capabilities: {
+          genes: true,
+        },
+      },
+    ])
+
+    const caps = getRuntimeCaps('custom-runtime')
+
+    expect(caps.genes).toBe(true)
+    expect(caps.dataRoot).toBe('.custom')
+  })
 })

@@ -11,7 +11,7 @@ import api from '@/services/api'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
 import type { InstanceSkillItem, InstanceGeneItem, GenomeItem } from '@/stores/gene'
-import { getRuntimeCaps, getRuntimeDefaultCapabilities } from '@/utils/runtimeCapabilities'
+import { getRuntimeCaps, getRuntimeDefaultCapabilities, setRuntimeEngines } from '@/utils/runtimeCapabilities'
 import { copyToClipboard } from '@/utils/clipboard'
 import { formatDate } from '@/utils/localeFormat'
 import { Button } from '@/components/ui/button'
@@ -143,7 +143,12 @@ async function fetchDetail() {
   loading.value = true
   error.value = ''
   try {
-    const res = await api.get(`/instances/${props.instanceId}`)
+    const [res] = await Promise.all([
+      api.get(`/instances/${props.instanceId}`),
+      api.get('/engines')
+        .then((enginesRes) => setRuntimeEngines(enginesRes.data.data ?? []))
+        .catch(() => undefined),
+    ])
     const data = res.data.data
     if (data) {
       data.workspaces = Array.isArray(data?.workspaces) ? data.workspaces : (data?.workspace_id ? [{ id: data.workspace_id, name: data.workspace_name ?? '' }] : [])

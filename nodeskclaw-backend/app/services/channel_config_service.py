@@ -449,11 +449,26 @@ def _require_runtime_capability(
         )
 
 
+def _require_openclaw_channel_capability(
+    instance: Instance,
+    capability: str,
+    operation: str,
+) -> None:
+    runtime = instance.runtime or "openclaw"
+    if runtime != "openclaw":
+        raise UnsupportedCapabilityError(
+            runtime_id=runtime,
+            capability=capability,
+            operation=operation,
+        )
+    _require_runtime_capability(instance, capability, operation)
+
+
 async def deploy_repo_channel(
     instance: Instance, db: AsyncSession, channel_id: str,
 ) -> dict:
     """Deploy a repo-based channel plugin to the instance Pod."""
-    _require_runtime_capability(instance, "repo_channel_sync", "channel.deploy_repo_plugin")
+    _require_openclaw_channel_capability(instance, "repo_channel_sync", "channel.deploy_repo_plugin")
     plugin_info = REPO_CHANNEL_PLUGINS.get(channel_id)
     if not plugin_info:
         raise BadRequestError(
@@ -510,7 +525,7 @@ async def install_npm_channel(
     instance: Instance, db: AsyncSession, package_name: str,
 ) -> dict:
     """Install a third-party channel plugin via runtime tooling in the Pod."""
-    _require_runtime_capability(instance, "npm_channel_install", "channel.install_npm_plugin")
+    _require_openclaw_channel_capability(instance, "npm_channel_install", "channel.install_npm_plugin")
     if not package_name or not package_name.strip():
         raise BadRequestError(
             message="npm 包名不能为空",
@@ -554,7 +569,7 @@ async def upload_channel_plugin(
 
     plugin_files: dict mapping relative paths to file contents (text).
     """
-    _require_runtime_capability(instance, "upload_channel_plugin", "channel.upload_plugin")
+    _require_openclaw_channel_capability(instance, "upload_channel_plugin", "channel.upload_plugin")
     if not plugin_id:
         raise BadRequestError(
             message="插件 ID 不能为空",

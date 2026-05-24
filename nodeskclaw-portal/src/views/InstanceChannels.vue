@@ -521,7 +521,7 @@ watch(() => instanceId.value, (val) => {
         </div>
       </div>
 
-      <!-- Custom install section (OpenClaw only) -->
+      <!-- Custom install section -->
       <div v-if="supportsPluginInstall" class="space-y-3">
         <Button variant="unstyled" size="unstyled"
           class="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"

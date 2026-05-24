@@ -3,6 +3,8 @@ from types import SimpleNamespace
 import pytest
 
 from app.core.exceptions import UnsupportedCapabilityError
+from app.services import channel_config_service
+from app.services.channel_config_service import _require_openclaw_channel_capability
 from app.services.channel_config_service import _require_runtime_capability
 from app.services.gene_service import _apply_manifest_actions
 from app.services.runtime.hermes_gene_install_adapter import HermesGeneInstallAdapter
@@ -54,6 +56,25 @@ def test_channel_runtime_capability_gate_raises_structured_error():
         "runtime_id": "hermes",
         "capability": "repo_channel_sync",
         "operation": "channel.deploy_repo_plugin",
+    }
+
+
+def test_openclaw_channel_capability_gate_rejects_non_openclaw_runtime(monkeypatch):
+    monkeypatch.setattr(channel_config_service, "runtime_supports_capability", lambda _runtime, _capability: True)
+    instance = SimpleNamespace(runtime="custom")
+
+    with pytest.raises(UnsupportedCapabilityError) as exc:
+        _require_openclaw_channel_capability(
+            instance,
+            "upload_channel_plugin",
+            "channel.upload_plugin",
+        )
+
+    assert exc.value.details == {
+        "code": "UNSUPPORTED_CAPABILITY",
+        "runtime_id": "custom",
+        "capability": "upload_channel_plugin",
+        "operation": "channel.upload_plugin",
     }
 
 

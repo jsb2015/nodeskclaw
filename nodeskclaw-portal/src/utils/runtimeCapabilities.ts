@@ -122,13 +122,14 @@ function boolFromBackend(
 }
 
 function dataRootFromEngine(engine: RuntimeEnginePayload, fallback: string): string {
+  const configPath = engine.config_rel_path?.trim().replace(/^\/+/, '')
+  const configRoot = configPath?.split('/')[0]
+  if (configRoot) {
+    return configRoot
+  }
   const containerPath = engine.data_dir_container_path?.trim()
   if (containerPath) {
-    return containerPath.replace(/^\/root\/?/, '').replace(/\/$/, '') || fallback
-  }
-  const configPath = engine.config_rel_path?.trim()
-  if (configPath?.includes('/')) {
-    return configPath.split('/')[0] || fallback
+    return containerPath.replace(/^\/root\/?/, '').replace(/^\/+/, '').replace(/\/$/, '') || fallback
   }
   return fallback
 }
