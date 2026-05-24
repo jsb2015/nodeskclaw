@@ -113,6 +113,7 @@ function genesPageHref(): string {
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let pollTimeout: ReturnType<typeof setTimeout> | null = null
+let genesFetchKey: string | null = null
 
 const statusColors: Record<string, string> = {
   running: 'text-green-400',
@@ -138,17 +139,32 @@ function close() {
   emit('update:visible', false)
 }
 
+function fetchGenesIfSupported() {
+  if (!props.instanceId) return
+  const runtime = instance.value?.runtime ?? 'openclaw'
+  if (!getRuntimeCaps(runtime).genes) return
+  const key = `${props.instanceId}:${runtime}`
+  if (genesFetchKey === key) return
+  genesFetchKey = key
+  fetchGenes()
+}
+
+function hydrateRuntimeEngines() {
+  api.get('/engines')
+    .then((enginesRes) => {
+      setRuntimeEngines(enginesRes.data.data ?? [])
+      fetchGenesIfSupported()
+    })
+    .catch(() => undefined)
+}
+
 async function fetchDetail() {
   if (!props.instanceId) return
+  genesFetchKey = null
   loading.value = true
   error.value = ''
   try {
-    const [res] = await Promise.all([
-      api.get(`/instances/${props.instanceId}`),
-      api.get('/engines')
-        .then((enginesRes) => setRuntimeEngines(enginesRes.data.data ?? []))
-        .catch(() => undefined),
-    ])
+    const res = await api.get(`/instances/${props.instanceId}`)
     const data = res.data.data
     if (data) {
       data.workspaces = Array.isArray(data?.workspaces) ? data.workspaces : (data?.workspace_id ? [{ id: data.workspace_id, name: data.workspace_name ?? '' }] : [])
@@ -164,9 +180,8 @@ async function fetchDetail() {
   } finally {
     loading.value = false
   }
-  if (getRuntimeCaps(instance.value?.runtime ?? 'openclaw').genes) {
-    fetchGenes()
-  }
+  fetchGenesIfSupported()
+  hydrateRuntimeEngines()
 }
 
 async function fetchGenes() {
@@ -329,6 +344,7 @@ watch(() => props.visible, (val) => {
     skills.value = []
     instanceGenes.value = []
     appliedGenomes.value = []
+    genesFetchKey = null
     fetchDetail()
   } else {
     stopPolling()
