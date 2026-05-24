@@ -44,7 +44,7 @@ def test_builtin_runtime_capability_matrix_matches_first_stage_contract():
     assert openclaw.capability_map()["web_ui"] is True
 
     assert hermes.capability_map()["genes"] is True
-    assert hermes.capability_map()["evolution_log"] is True
+    assert hermes.capability_map()["evolution_log"] is False
     assert hermes.capability_map()["tool_allow"] is False
     assert hermes.capability_map()["runtime_config_patch"] is False
     assert hermes.capability_map()["repo_channel_sync"] is False
@@ -67,6 +67,6 @@ async def test_engine_listing_returns_runtime_capabilities():
     assert engines["openclaw"]["config_rel_path"] == ".openclaw/openclaw.json"
     assert engines["openclaw"]["backup_dirs"] == [".openclaw", ".deskclaw/tools"]
 
-    assert engines["hermes"]["capabilities"]["evolution_log"] is True
+    assert engines["hermes"]["capabilities"]["evolution_log"] is False
     assert engines["hermes"]["capabilities"]["tool_allow"] is False
     assert engines["hermes"]["config_rel_path"] == ".hermes/config.yaml"

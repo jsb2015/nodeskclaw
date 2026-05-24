@@ -72,7 +72,7 @@ const LEGACY_CAPS: Record<string, RuntimeCapabilities> = {
   },
   hermes: {
     genes: true,
-    evolutionLog: true,
+    evolutionLog: false,
     llmConfig: true,
     channelConfig: true,
     channelPluginDiscovery: false,

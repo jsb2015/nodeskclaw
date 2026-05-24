@@ -193,7 +193,7 @@ def _register_builtins() -> None:
         display_powered_by="Hermes Agent",
         capabilities=RuntimeProductCapabilities(
             genes=True,
-            evolution_log=True,
+            evolution_log=False,
             llm_config=True,
             channel_config=True,
             channel_plugin_discovery=False,

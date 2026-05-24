@@ -29,7 +29,7 @@ describe('runtimeCapabilities', () => {
         data_dir_container_path: '/root/.hermes',
         capabilities: {
           genes: true,
-          evolution_log: true,
+          evolution_log: false,
           llm_config: true,
           channel_config: true,
           channel_plugin_discovery: false,
@@ -49,7 +49,7 @@ describe('runtimeCapabilities', () => {
 
     const caps = getRuntimeCaps('hermes')
 
-    expect(caps.evolutionLog).toBe(true)
+    expect(caps.evolutionLog).toBe(false)
     expect(caps.toolAllow).toBe(false)
     expect(caps.runtimeConfigPatch).toBe(false)
     expect(caps.npmChannelInstall).toBe(false)
@@ -63,5 +63,13 @@ describe('runtimeCapabilities', () => {
     expect(caps.toolAllow).toBe(true)
     expect(caps.repoChannelSync).toBe(true)
     expect(caps.dataRoot).toBe('.openclaw')
+  })
+
+  it('keeps Hermes evolution log disabled in the legacy fallback', () => {
+    const caps = getRuntimeCaps('hermes')
+
+    expect(caps.genes).toBe(true)
+    expect(caps.evolutionLog).toBe(false)
+    expect(caps.dataRoot).toBe('.hermes')
   })
 })
