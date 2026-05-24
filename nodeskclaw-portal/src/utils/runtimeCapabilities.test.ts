@@ -19,7 +19,7 @@ describe('runtimeCapabilities', () => {
     expect(caps.llmConfig).toBe(false)
     expect(caps.npmChannelInstall).toBe(false)
     expect(caps.uploadChannelPlugin).toBe(false)
-    expect(caps.dataRoot).toBe('.deskclaw')
+    expect(caps.dataRoot).toBe('')
   })
 
   it('uses backend capabilities when engines are provided', () => {

@@ -48,7 +48,7 @@ const MINIMAL_CAPS: RuntimeCapabilities = {
   backup: false,
   runtimeConfigPatch: false,
   toolAllow: false,
-  dataRoot: '.deskclaw',
+  dataRoot: '',
 }
 
 const LEGACY_CAPS: Record<string, RuntimeCapabilities> = {
