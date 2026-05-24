@@ -1,4 +1,8 @@
+import io
+import json
+import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select
@@ -10,6 +14,8 @@ from app.models.gene import ContentVisibility, Gene, GeneSource
 from app.services.agent_bundle_service import (
     build_bundle_env_vars,
     parse_agent_bundle_dir,
+    parse_agent_bundle_zip,
+    restore_agent_bundle,
     summarize_agent_bundle_manifest,
 )
 from app.services.deploy_service import _collect_secret_env_refs
@@ -24,6 +30,20 @@ FIXTURES = Path(__file__).parent / "fixtures" / "agent_bundles"
 TEST_DATABASE_URL = "postgresql+asyncpg://nodeskclaw:nodeskclaw@localhost:5432/nodeskclaw_test"
 engine = create_async_engine(TEST_DATABASE_URL, echo=False)
 TestSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+
+def make_agent_bundle_zip(extra_path: str, extra_content: str = "payload") -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("config.json", json.dumps({"name": "Q", "slug": "q", "model": "mock/q", "env": {}}))
+        zf.writestr("AGENT.md", "# Q\nhello")
+        zf.writestr("SOUL.md", "soul")
+        zf.writestr(
+            "skills/echo/SKILL.md",
+            "---\nname: echo\nversion: 1.0.0\ndescription: Echo skill\npermissions:\n  tools: []\n---\n# Echo\n",
+        )
+        zf.writestr(extra_path, extra_content)
+    return buf.getvalue()
 
 
 @pytest.fixture
@@ -72,6 +92,54 @@ def test_parse_invalid_agent_bundle_fixtures(name: str, message: str) -> None:
         parse_agent_bundle_dir(FIXTURES / name)
 
     assert message in exc.value.message
+
+
+@pytest.mark.parametrize(
+    "unsafe_path",
+    [
+        "skills/echo/bad'name.txt",
+        "skills/echo/bad;name.txt",
+        "skills/echo/bad name.txt",
+        "skills/echo/bad$name.txt",
+        "skills\\echo\\bad.txt",
+        "skills/echo/bad\nname.txt",
+        "skills/echo/./bad.txt",
+        "skills//echo/bad.txt",
+    ],
+)
+def test_parse_agent_bundle_zip_rejects_shell_sensitive_paths(unsafe_path: str) -> None:
+    with pytest.raises(BadRequestError) as exc:
+        parse_agent_bundle_zip("bundle.zip", make_agent_bundle_zip(unsafe_path))
+
+    assert "非法路径" in exc.value.message
+
+
+@pytest.mark.asyncio
+async def test_restore_agent_bundle_rejects_unsafe_manifest_path(monkeypatch) -> None:
+    class FakeFS:
+        async def remove(self, _path):
+            return None
+
+        async def write_text(self, _path, _content):
+            raise AssertionError("unsafe manifest path should be rejected before remote write")
+
+    class FakeRemoteFSContext:
+        async def __aenter__(self):
+            return FakeFS()
+
+        async def __aexit__(self, *_args):
+            return None
+
+    monkeypatch.setattr("app.services.nfs_mount.remote_fs", lambda _instance, _db: FakeRemoteFSContext())
+
+    with pytest.raises(BadRequestError) as exc:
+        await restore_agent_bundle(
+            SimpleNamespace(id="inst-1"),
+            {"slug": "safe", "files": {"skills/echo/bad'name.txt": "payload"}},
+            db=None,
+        )
+
+    assert "非法恢复路径" in exc.value.message
 
 
 def test_agent_bundle_summary_hides_file_content() -> None:

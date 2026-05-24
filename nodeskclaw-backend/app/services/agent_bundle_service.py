@@ -31,12 +31,33 @@ SECRET_KEY_MARKERS = (
     "token",
 )
 SECRET_REF_SUFFIXES = ("_ref", "ref", "reference")
+BUNDLE_REL_PATH_PATTERN = re.compile(r"^[A-Za-z0-9._/-]+$")
 
 
 def normalize_bundle_slug(value: str) -> str:
     slug = re.sub(r"[^a-z0-9-]+", "-", value.lower()).strip("-")
     slug = re.sub(r"-{2,}", "-", slug)
     return slug[:96].strip("-") or "agent-bundle"
+
+
+def _validate_bundle_rel_path(raw: str, message: str | None = None) -> str:
+    rel = str(raw)
+    normalized = posixpath.normpath(rel)
+    invalid = (
+        not rel
+        or normalized in ("", ".")
+        or normalized != rel
+        or normalized.startswith("../")
+        or normalized == ".."
+        or normalized.startswith("/")
+        or "\\" in rel
+        or any(ord(ch) < 32 or ord(ch) == 127 for ch in rel)
+        or any(not part or part.startswith(".") for part in normalized.split("/"))
+        or not BUNDLE_REL_PATH_PATTERN.fullmatch(normalized)
+    )
+    if invalid:
+        raise BadRequestError(message or f"Agent Bundle 包含非法路径: {rel}")
+    return normalized
 
 
 def _read_text(path: Path) -> str:
@@ -51,12 +72,7 @@ def _read_text(path: Path) -> str:
 
 def _safe_rel(path: Path, root: Path) -> str:
     rel = path.relative_to(root).as_posix()
-    normalized = posixpath.normpath(rel)
-    if normalized.startswith("../") or normalized == ".." or normalized.startswith("/"):
-        raise BadRequestError(f"Agent Bundle 包含非法路径: {rel}")
-    if any(part.startswith(".") for part in normalized.split("/")):
-        raise BadRequestError(f"Agent Bundle 不允许隐藏文件路径: {rel}")
-    return normalized
+    return _validate_bundle_rel_path(rel)
 
 
 def _parse_json(text: str, filename: str) -> dict[str, Any]:
@@ -98,9 +114,10 @@ def _validate_declared_script_paths(meta: dict[str, Any], skill_path: str) -> No
     elif isinstance(declared, dict):
         paths = [str(item) for item in declared.values()]
     for raw in paths:
-        normalized = posixpath.normpath(raw)
-        if normalized.startswith("../") or normalized.startswith("/") or normalized == "..":
-            raise BadRequestError(f"{skill_path} 声明了非法脚本路径: {raw}")
+        try:
+            _validate_bundle_rel_path(raw)
+        except BadRequestError as exc:
+            raise BadRequestError(f"{skill_path} 声明了非法脚本路径: {raw}") from exc
 
 
 def _is_secret_key(key: str) -> bool:
@@ -238,9 +255,10 @@ def parse_agent_bundle_zip(filename: str, data: bytes) -> dict[str, Any]:
         try:
             with zipfile.ZipFile(zip_path) as zf:
                 for info in zf.infolist():
-                    normalized = posixpath.normpath(info.filename)
-                    if normalized.startswith("../") or normalized.startswith("/") or normalized == "..":
-                        raise BadRequestError(f"压缩包包含非法路径: {info.filename}")
+                    _validate_bundle_rel_path(
+                        info.filename.rstrip("/"),
+                        f"压缩包包含非法路径: {info.filename}",
+                    )
                 zf.extractall(tmp_path / "bundle")
         except zipfile.BadZipFile as exc:
             raise BadRequestError("Agent Bundle 压缩包无法读取") from exc
@@ -314,9 +332,7 @@ async def restore_agent_bundle(instance: Instance, manifest: dict[str, Any], db:
     async with remote_fs(instance, db) as fs:
         await fs.remove(base_rel)
         for rel, content in files.items():
-            safe_rel = posixpath.normpath(str(rel))
-            if safe_rel.startswith("../") or safe_rel.startswith("/") or safe_rel == "..":
-                raise BadRequestError(f"Agent Bundle 包含非法恢复路径: {rel}")
+            safe_rel = _validate_bundle_rel_path(str(rel), f"Agent Bundle 包含非法恢复路径: {rel}")
             await fs.write_text(f"{base_rel}/{safe_rel}", str(content))
         await fs.write_text(
             f"{base_rel}/.nodeskclaw-manifest.json",
