@@ -70,6 +70,28 @@ def make_base_agent_bundle_zip(
     return buf.getvalue()
 
 
+def make_agent_bundle_zip_with_skill_name(skill_name: str) -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("config.json", json.dumps({"name": "Q", "slug": "q", "model": "mock/q", "env": {}}))
+        zf.writestr("AGENT.md", "# Q\nhello")
+        zf.writestr("SOUL.md", "soul")
+        zf.writestr(
+            "skills/echo/SKILL.md",
+            "\n".join([
+                "---",
+                f"name: {json.dumps(skill_name)}",
+                "version: 1.0.0",
+                "description: Echo skill",
+                "permissions:",
+                "  tools: []",
+                "---",
+                "# Echo",
+            ]),
+        )
+    return buf.getvalue()
+
+
 class FakeUploadFile:
     def __init__(self, data: bytes):
         self.data = data
@@ -153,6 +175,42 @@ def test_parse_agent_bundle_zip_rejects_shell_sensitive_paths(unsafe_path: str) 
         parse_agent_bundle_zip("bundle.zip", make_agent_bundle_zip(unsafe_path))
 
     assert "非法路径" in exc.value.message
+
+
+@pytest.mark.parametrize(
+    "unsafe_name",
+    [
+        "../../workspace/pwned",
+        "../x",
+        "x/y",
+        "x\\y",
+        ".hidden",
+        "..",
+        "bad name",
+        "bad;name",
+        "bad$name",
+        "bad\nname",
+    ],
+)
+def test_parse_agent_bundle_zip_rejects_unsafe_skill_names(unsafe_name: str) -> None:
+    with pytest.raises(BadRequestError) as exc:
+        parse_agent_bundle_zip("bundle.zip", make_agent_bundle_zip_with_skill_name(unsafe_name))
+
+    assert "skill name" in exc.value.message
+
+
+@pytest.mark.parametrize(
+    "skill_name",
+    [
+        "echo",
+        "content-video-clone-workflow",
+        "team_culture.v1",
+    ],
+)
+def test_parse_agent_bundle_zip_accepts_safe_skill_names(skill_name: str) -> None:
+    manifest = parse_agent_bundle_zip("bundle.zip", make_agent_bundle_zip_with_skill_name(skill_name))
+
+    assert manifest["skills"][0]["name"] == skill_name
 
 
 def test_parse_agent_bundle_zip_does_not_call_extractall(monkeypatch) -> None:

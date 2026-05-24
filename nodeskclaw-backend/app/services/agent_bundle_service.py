@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BadRequestError
 from app.models.instance import Instance
+from app.services.runtime.gene_install_adapter import validate_skill_name_segment
 
 REQUIRED_FILES = ("AGENT.md", "SOUL.md", "config.json")
 MAX_FILE_BYTES = 512 * 1024
@@ -106,6 +107,7 @@ def _parse_frontmatter(content: str, skill_path: str) -> dict[str, Any]:
         raise BadRequestError(f"{skill_path} 的 YAML front matter 必须是对象")
     if not str(meta.get("name") or "").strip():
         raise BadRequestError(f"{skill_path} 缺少 name")
+    meta["name"] = validate_skill_name_segment(meta["name"], f"{skill_path} 包含非法 skill name")
     if not str(meta.get("description") or "").strip():
         raise BadRequestError(f"{skill_path} 缺少 description")
     _validate_declared_script_paths(meta, skill_path)

@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from app.services.runtime.gene_install_adapter import GeneInstallAdapter
+from app.services.runtime.gene_install_adapter import GeneInstallAdapter, validate_skill_name_segment
 
 if TYPE_CHECKING:
     from app.services.nfs_mount import RemoteFS
@@ -26,8 +26,9 @@ class NoopGeneInstallAdapter(GeneInstallAdapter):
     async def deploy_skill(
         self, fs: RemoteFS, skill_name: str, content: str, description: str = "",
     ) -> None:
-        await fs.mkdir(f"{SKILLS_DIR_REL}/{skill_name}")
-        await fs.write_text(f"{SKILLS_DIR_REL}/{skill_name}/SKILL.md", content)
+        safe_skill_name = validate_skill_name_segment(skill_name)
+        await fs.mkdir(f"{SKILLS_DIR_REL}/{safe_skill_name}")
+        await fs.write_text(f"{SKILLS_DIR_REL}/{safe_skill_name}/SKILL.md", content)
 
     async def allow_tools(self, fs: RemoteFS, tool_names: list[str]) -> None:
         if tool_names:
@@ -56,7 +57,8 @@ class NoopGeneInstallAdapter(GeneInstallAdapter):
         logger.debug("NoopGeneInstallAdapter: cache invalidation not implemented for skill=%s", skill_name)
 
     async def remove_skill(self, fs: RemoteFS, skill_name: str) -> None:
-        await fs.remove(f"{SKILLS_DIR_REL}/{skill_name}")
+        safe_skill_name = validate_skill_name_segment(skill_name)
+        await fs.remove(f"{SKILLS_DIR_REL}/{safe_skill_name}")
 
     async def post_remove_cleanup(self, fs: RemoteFS, skill_name: str) -> None:
         logger.debug(
