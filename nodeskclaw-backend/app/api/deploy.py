@@ -97,7 +97,15 @@ async def deploy_progress_stream(
         db,
         current_user.current_org_id,
     )
-    snapshot = await deploy_service.get_deploy_progress_snapshot(deploy_id, db)
+    queue, cleanup = event_bus.create_subscription("deploy_progress")
+    try:
+        snapshot = await deploy_service.get_deploy_progress_snapshot(deploy_id, db)
+    except Exception:
+        cleanup()
+        raise
+
+    if snapshot:
+        cleanup()
 
     async def generate():
         if snapshot:
@@ -107,12 +115,16 @@ async def deploy_progress_stream(
             ).format()
             return
 
-        async for event in event_bus.subscribe("deploy_progress"):
-            if event.data.get("deploy_id") == deploy_id:
-                yield event.format()
-                step = event.data.get("step") or 0
-                total_steps = event.data.get("total_steps") or 0
-                if event.data.get("status") in ("success", "failed") and step >= total_steps:
-                    break
+        try:
+            while True:
+                event = await queue.get()
+                if event.data.get("deploy_id") == deploy_id:
+                    yield event.format()
+                    step = event.data.get("step") or 0
+                    total_steps = event.data.get("total_steps") or 0
+                    if event.data.get("status") in ("success", "failed") and step >= total_steps:
+                        break
+        finally:
+            cleanup()
 
     return StreamingResponse(generate(), media_type="text/event-stream")
