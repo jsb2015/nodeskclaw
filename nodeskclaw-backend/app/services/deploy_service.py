@@ -164,12 +164,25 @@ async def _restore_agent_bundle_with_retry(
 
 
 def _post_ready_step_names(ctx: "_DeployContext") -> list[str]:
+    return _post_ready_step_names_from_values(
+        should_sync_runtime_llm_config=ctx.should_sync_runtime_llm_config,
+        template_agent_bundle_manifest=ctx.template_agent_bundle_manifest,
+        template_gene_slugs=ctx.template_gene_slugs,
+    )
+
+
+def _post_ready_step_names_from_values(
+    *,
+    should_sync_runtime_llm_config: bool = False,
+    template_agent_bundle_manifest: dict | None = None,
+    template_gene_slugs: list[str] | None = None,
+) -> list[str]:
     steps: list[str] = []
-    if ctx.should_sync_runtime_llm_config:
+    if should_sync_runtime_llm_config:
         steps.append("应用实例配置")
-    if ctx.template_agent_bundle_manifest:
+    if template_agent_bundle_manifest:
         steps.append("恢复 AI 员工模板包")
-    if ctx.template_gene_slugs:
+    if template_gene_slugs:
         steps.append("安装模板技能基因")
     return steps
 
@@ -414,6 +427,105 @@ DEPLOY_STEPS_BASE = [
 ]
 
 
+DOCKER_DEPLOY_STEPS = ["环境预检查", "启动容器", "等待容器就绪", "部署完成"]
+
+PROGRESS_STEP_NAMES_KEY = "progress_step_names"
+
+
+def _load_deploy_config_snapshot(record: DeployRecord) -> dict:
+    raw = getattr(record, "config_snapshot", None)
+    if isinstance(raw, dict):
+        return dict(raw)
+    if not raw or not isinstance(raw, str):
+        return {}
+    try:
+        parsed = _json.loads(raw)
+    except (TypeError, ValueError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _dump_deploy_config_snapshot(snapshot: dict) -> str:
+    return _json.dumps(snapshot, ensure_ascii=False)
+
+
+def _extract_progress_step_names(record: DeployRecord) -> list[str] | None:
+    steps = _load_deploy_config_snapshot(record).get(PROGRESS_STEP_NAMES_KEY)
+    if not isinstance(steps, list) or not steps:
+        return None
+    if not all(isinstance(step, str) and step for step in steps):
+        return None
+    return list(steps)
+
+
+def _set_progress_step_names(record: DeployRecord, step_names: list[str]) -> None:
+    snapshot = _load_deploy_config_snapshot(record)
+    snapshot[PROGRESS_STEP_NAMES_KEY] = list(step_names)
+    record.config_snapshot = _dump_deploy_config_snapshot(snapshot)
+
+
+def _deploy_progress_step_names_for_provider(
+    compute_provider: str | None,
+    post_ready_steps: list[str],
+) -> list[str]:
+    if compute_provider and compute_provider != "k8s":
+        return [*DOCKER_DEPLOY_STEPS[:-1], *post_ready_steps, DOCKER_DEPLOY_STEPS[-1]]
+    return [*DEPLOY_STEPS_BASE, *post_ready_steps]
+
+
+def _deploy_progress_step_names_for_context(ctx: "_DeployContext") -> list[str]:
+    return _deploy_progress_step_names_for_provider(
+        ctx.compute_provider,
+        _post_ready_step_names(ctx),
+    )
+
+
+async def _persist_deploy_progress_step_names(
+    db: AsyncSession,
+    deploy_id: str,
+    step_names: list[str],
+) -> None:
+    result = await db.execute(
+        select(DeployRecord).where(
+            DeployRecord.id == deploy_id,
+            DeployRecord.deleted_at.is_(None),
+        )
+    )
+    record = result.scalar_one_or_none()
+    if not record:
+        return
+    _set_progress_step_names(record, step_names)
+    await db.commit()
+
+
+async def _legacy_progress_step_names(record: DeployRecord, db: AsyncSession) -> list[str]:
+    action = getattr(record, "action", None)
+    if action in (DeployAction.rebuild, DeployAction.restore):
+        return list(REBUILD_STEPS)
+
+    compute_provider = getattr(record, "compute_provider", None)
+    instance = getattr(record, "instance", None)
+    if not compute_provider and instance is not None:
+        compute_provider = getattr(instance, "compute_provider", None)
+    instance_id = getattr(record, "instance_id", None)
+    if not compute_provider and instance_id:
+        result = await db.execute(
+            select(Instance.compute_provider).where(
+                Instance.id == instance_id,
+                Instance.deleted_at.is_(None),
+            )
+        )
+        compute_provider = result.scalar_one_or_none()
+
+    if compute_provider and compute_provider != "k8s":
+        return list(DOCKER_DEPLOY_STEPS)
+    return list(DEPLOY_STEPS_BASE)
+
+
+async def _progress_step_names_for_record(record: DeployRecord, db: AsyncSession) -> list[str]:
+    return _extract_progress_step_names(record) or await _legacy_progress_step_names(record, db)
+
+
 async def get_deploy_progress_snapshot(
     deploy_id: str,
     db: AsyncSession,
@@ -430,15 +542,17 @@ async def get_deploy_progress_snapshot(
 
     status = "success" if record.status == DeployStatus.success else "failed"
     current_step = "完成" if status == "success" else "失败"
+    step_names = await _progress_step_names_for_record(record, db)
+    total_steps = len(step_names)
     return DeployProgress(
         deploy_id=deploy_id,
-        step=len(DEPLOY_STEPS_BASE),
-        total_steps=len(DEPLOY_STEPS_BASE),
+        step=total_steps,
+        total_steps=total_steps,
         current_step=current_step,
         status=status,
         message=record.message,
         percent=100,
-        step_names=DEPLOY_STEPS_BASE,
+        step_names=step_names,
     )
 
 
@@ -830,6 +944,16 @@ async def deploy_instance(
         revision=next_rev,
         action=DeployAction.deploy,
         image_version=req.image_version,
+        config_snapshot=_dump_deploy_config_snapshot({
+            PROGRESS_STEP_NAMES_KEY: _deploy_progress_step_names_for_provider(
+                instance.compute_provider,
+                _post_ready_step_names_from_values(
+                    should_sync_runtime_llm_config=should_sync_runtime_llm_config,
+                    template_agent_bundle_manifest=template_agent_bundle_manifest,
+                    template_gene_slugs=template_gene_slugs,
+                ),
+            )
+        }),
         status=DeployStatus.running,
         triggered_by=user.id,
         started_at=datetime.now(timezone.utc),
@@ -885,16 +1009,15 @@ async def execute_deploy_pipeline(ctx: _DeployContext) -> None:
     from app.core.deps import async_session_factory
     from app.services.config_service import get_config
 
-    steps = [*DEPLOY_STEPS_BASE, *_post_ready_step_names(ctx)]
+    steps = _deploy_progress_step_names_for_context(ctx)
     total = len(steps)
 
     try:
+        async with async_session_factory() as db:
+            await _persist_deploy_progress_step_names(db, ctx.record_id, steps)
         await _execute_deploy_inner(ctx, async_session_factory, get_config, total, steps)
     finally:
         _unregister_deploy_task(ctx.record_id)
-
-
-DOCKER_DEPLOY_STEPS = ["环境预检查", "启动容器", "等待容器就绪", "部署完成"]
 
 
 async def _execute_via_compute_provider(ctx: _DeployContext) -> None:
@@ -911,8 +1034,10 @@ async def _execute_via_compute_provider(ctx: _DeployContext) -> None:
         return
 
     provider = spec.provider
-    step_names = [*DOCKER_DEPLOY_STEPS[:-1], *_post_ready_step_names(ctx), DOCKER_DEPLOY_STEPS[-1]]
+    step_names = _deploy_progress_step_names_for_context(ctx)
     total = len(step_names)
+    async with async_session_factory() as db:
+        await _persist_deploy_progress_step_names(db, ctx.record_id, step_names)
 
     env_vars = dict(ctx.env_vars or {})
     if "DOCKER_IMAGE" not in env_vars:
@@ -1573,6 +1698,9 @@ async def rebuild_instance(
         revision=next_rev,
         action=DeployAction.rebuild,
         image_version=instance.image_version,
+        config_snapshot=_dump_deploy_config_snapshot({
+            PROGRESS_STEP_NAMES_KEY: list(REBUILD_STEPS)
+        }),
         status=DeployStatus.running,
         triggered_by=user_id,
         started_at=datetime.now(timezone.utc),
@@ -1619,6 +1747,8 @@ async def execute_rebuild_pipeline(ctx: _DeployContext) -> None:
 
     steps = list(REBUILD_STEPS)
     total = len(steps)
+    async with async_session_factory() as db:
+        await _persist_deploy_progress_step_names(db, ctx.record_id, steps)
 
     def _publish(step: int, step_name: str, *, status: str = "in_progress",
                  message: str = "", logs: list[str] | None = None) -> None:

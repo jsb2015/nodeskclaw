@@ -192,11 +192,19 @@ async def restore_from_backup(
         )
     )
     next_rev = max_rev.scalar() + 1
+    from app.services.deploy_service import (
+        PROGRESS_STEP_NAMES_KEY,
+        REBUILD_STEPS,
+        _dump_deploy_config_snapshot,
+    )
     record = DeployRecord(
         instance_id=instance.id,
         revision=next_rev,
         action=DeployAction.restore,
         image_version=instance.image_version,
+        config_snapshot=_dump_deploy_config_snapshot({
+            PROGRESS_STEP_NAMES_KEY: list(REBUILD_STEPS)
+        }),
         status=DeployStatus.running,
         triggered_by=user_id,
         started_at=datetime.now(timezone.utc),

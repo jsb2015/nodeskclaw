@@ -1,3 +1,4 @@
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -8,6 +9,9 @@ from app.schemas.deploy import DeployRequest
 from app.services import deploy_service
 from app.services.deploy_service import (
     DEPLOY_STEPS_BASE,
+    DOCKER_DEPLOY_STEPS,
+    PROGRESS_STEP_NAMES_KEY,
+    REBUILD_STEPS,
     _DeployContext,
     _require_supported_runtime,
     _restore_agent_bundle_with_retry,
@@ -71,17 +75,91 @@ def test_require_supported_runtime_rejects_removed_nanobot_runtime() -> None:
     assert "nanobot" in exc_info.value.message
 
 
+def test_set_progress_step_names_preserves_existing_config_snapshot() -> None:
+    record = SimpleNamespace(config_snapshot=json.dumps({"rollback": {"env": "old"}}))
+
+    deploy_service._set_progress_step_names(record, ["环境预检查", "部署完成"])
+
+    snapshot = json.loads(record.config_snapshot)
+    assert snapshot["rollback"] == {"env": "old"}
+    assert snapshot[PROGRESS_STEP_NAMES_KEY] == ["环境预检查", "部署完成"]
+
+
 @pytest.mark.asyncio
-async def test_deploy_progress_snapshot_replays_success_record() -> None:
+async def test_deploy_progress_snapshot_replays_saved_docker_steps() -> None:
+    step_names = [
+        "环境预检查",
+        "启动容器",
+        "等待容器就绪",
+        "应用实例配置",
+        "部署完成",
+    ]
     snapshot = await deploy_service.get_deploy_progress_snapshot(
         "deploy-1",
-        _FakeDb(SimpleNamespace(status=DeployStatus.success, message="部署成功")),
+        _FakeDb(SimpleNamespace(
+            status=DeployStatus.success,
+            message="部署成功",
+            config_snapshot=json.dumps({PROGRESS_STEP_NAMES_KEY: step_names}),
+        )),
     )
 
     assert snapshot is not None
     assert snapshot.status == "success"
     assert snapshot.percent == 100
-    assert snapshot.step_names == DEPLOY_STEPS_BASE
+    assert snapshot.step == len(step_names)
+    assert snapshot.total_steps == len(step_names)
+    assert snapshot.step_names == step_names
+
+
+@pytest.mark.asyncio
+async def test_deploy_progress_snapshot_replays_saved_k8s_post_ready_steps() -> None:
+    step_names = [*DEPLOY_STEPS_BASE, "应用实例配置"]
+    snapshot = await deploy_service.get_deploy_progress_snapshot(
+        "deploy-1",
+        _FakeDb(SimpleNamespace(
+            status=DeployStatus.success,
+            message="部署成功",
+            config_snapshot=json.dumps({PROGRESS_STEP_NAMES_KEY: step_names}),
+        )),
+    )
+
+    assert snapshot is not None
+    assert snapshot.step == len(step_names)
+    assert snapshot.total_steps == len(step_names)
+    assert snapshot.step_names == step_names
+
+
+@pytest.mark.asyncio
+async def test_deploy_progress_snapshot_falls_back_for_invalid_snapshot() -> None:
+    snapshot = await deploy_service.get_deploy_progress_snapshot(
+        "deploy-1",
+        _FakeDb(SimpleNamespace(
+            status=DeployStatus.failed,
+            action=deploy_service.DeployAction.deploy,
+            message="部署失败",
+            config_snapshot="{broken",
+            compute_provider="docker",
+        )),
+    )
+
+    assert snapshot is not None
+    assert snapshot.status == "failed"
+    assert snapshot.step_names == DOCKER_DEPLOY_STEPS
+
+
+@pytest.mark.asyncio
+async def test_deploy_progress_snapshot_falls_back_to_rebuild_steps() -> None:
+    snapshot = await deploy_service.get_deploy_progress_snapshot(
+        "deploy-1",
+        _FakeDb(SimpleNamespace(
+            status=DeployStatus.success,
+            action=deploy_service.DeployAction.restore,
+            message="恢复成功",
+        )),
+    )
+
+    assert snapshot is not None
+    assert snapshot.step_names == REBUILD_STEPS
 
 
 @pytest.mark.asyncio
@@ -146,7 +224,12 @@ async def test_execute_deploy_pipeline_adds_config_step_when_runtime_sync_reques
         captured["total"] = total
         captured["steps"] = steps
 
+    async def fake_persist(_db, deploy_id, steps):
+        captured["persisted_deploy_id"] = deploy_id
+        captured["persisted_steps"] = steps
+
     monkeypatch.setattr(deploy_service, "_execute_deploy_inner", fake_execute_inner)
+    monkeypatch.setattr(deploy_service, "_persist_deploy_progress_step_names", fake_persist)
 
     await deploy_service.execute_deploy_pipeline(
         _deploy_context(should_sync_runtime_llm_config=True)
@@ -154,6 +237,8 @@ async def test_execute_deploy_pipeline_adds_config_step_when_runtime_sync_reques
 
     assert captured["total"] == len(DEPLOY_STEPS_BASE) + 1
     assert captured["steps"] == [*DEPLOY_STEPS_BASE, "应用实例配置"]
+    assert captured["persisted_deploy_id"] == "deploy-1"
+    assert captured["persisted_steps"] == [*DEPLOY_STEPS_BASE, "应用实例配置"]
 
 
 @pytest.mark.asyncio
@@ -166,6 +251,11 @@ async def test_execute_deploy_pipeline_skips_config_step_without_runtime_sync(mo
         captured["steps"] = steps
 
     monkeypatch.setattr(deploy_service, "_execute_deploy_inner", fake_execute_inner)
+    monkeypatch.setattr(
+        deploy_service,
+        "_persist_deploy_progress_step_names",
+        lambda *_args, **_kwargs: deploy_service.asyncio.sleep(0),
+    )
 
     await deploy_service.execute_deploy_pipeline(
         _deploy_context(should_sync_runtime_llm_config=False)
@@ -187,6 +277,11 @@ async def test_execute_deploy_pipeline_adds_agent_bundle_restore_step(monkeypatc
     ctx = _deploy_context(should_sync_runtime_llm_config=False)
     ctx.template_agent_bundle_manifest = {"slug": "p0-echo-agent", "files": {}, "skills": []}
     monkeypatch.setattr(deploy_service, "_execute_deploy_inner", fake_execute_inner)
+    monkeypatch.setattr(
+        deploy_service,
+        "_persist_deploy_progress_step_names",
+        lambda *_args, **_kwargs: deploy_service.asyncio.sleep(0),
+    )
 
     await deploy_service.execute_deploy_pipeline(ctx)
 
@@ -208,9 +303,12 @@ async def test_compute_provider_deploy_runs_template_post_ready_steps(monkeypatc
         def scalar_one(self):
             return self.value
 
+        def scalar_one_or_none(self):
+            return self.value
+
     class FakeSession:
         def __init__(self):
-            self.results = [record, instance]
+            self.results = [record, record, instance]
             self.commits = 0
 
         async def __aenter__(self):
@@ -288,7 +386,15 @@ async def test_compute_provider_deploy_runs_template_post_ready_steps(monkeypatc
     assert record.message == "部署成功"
     assert record.finished_at is not None
     assert instance.status == deploy_service.InstanceStatus.running
-    assert fake_session.commits == 2
+    assert fake_session.commits == 3
+    assert json.loads(record.config_snapshot)[PROGRESS_STEP_NAMES_KEY] == [
+        "环境预检查",
+        "启动容器",
+        "等待容器就绪",
+        "恢复 AI 员工模板包",
+        "安装模板技能基因",
+        "部署完成",
+    ]
     assert published[0]["step_names"] == [
         "环境预检查",
         "启动容器",
@@ -445,9 +551,12 @@ async def test_compute_provider_post_ready_failure_marks_record_failed(monkeypat
         def scalar_one(self):
             return self.value
 
+        def scalar_one_or_none(self):
+            return self.value
+
     class FakeSession:
         def __init__(self):
-            self.results = [record, instance]
+            self.results = [record, record, instance]
 
         async def __aenter__(self):
             return self
@@ -469,7 +578,9 @@ async def test_compute_provider_post_ready_failure_marks_record_failed(monkeypat
     ctx.compute_provider = "docker"
     ctx.env_vars = {"DOCKER_IMAGE": "example/hermes:latest"}
 
-    monkeypatch.setattr("app.core.deps.async_session_factory", lambda: FakeSession())
+    fake_session = FakeSession()
+
+    monkeypatch.setattr("app.core.deps.async_session_factory", lambda: fake_session)
     monkeypatch.setattr(
         "app.services.runtime.registries.compute_registry.COMPUTE_REGISTRY.get",
         lambda compute_id: SimpleNamespace(provider=FakeProvider()) if compute_id == "docker" else None,
