@@ -23,6 +23,7 @@ import { formatTime as formatLocaleTime } from '@/utils/localeFormat'
 import { filterMessagesForConversation } from '@/utils/workspaceConversations'
 import { Button } from '@/components/ui/button'
 import { FileInput, Input } from '@/components/ui/input'
+import { useConfirm } from '@/composables/useConfirm'
 
 const props = withDefaults(defineProps<{
   workspaceId: string
@@ -37,6 +38,7 @@ const { t, te, locale } = useI18n()
 const store = useWorkspaceStore()
 const authStore = useAuthStore()
 const toast = useToast()
+const { confirm } = useConfirm()
 
 const messagesEl = ref<HTMLElement | null>(null)
 
@@ -194,7 +196,7 @@ const COMMANDS = computed(() => [
     badge: t('chat.cmdClearBadge'),
     icon: XCircle,
     needsAgent: false,
-    immediate: false,
+    immediate: true,
   },
   { name: 'restart', label: t('chat.cmdRestartLabel'), icon: RotateCw, needsAgent: true, immediate: false },
   { name: 'remove', label: t('chat.cmdRemoveLabel'), icon: Trash2, needsAgent: true, immediate: false },
@@ -310,6 +312,14 @@ async function executeSlashCommand(name: string, arg?: string) {
         toast.info(t('chat.clearUsage'), { duration: 8000 })
         break
       }
+      const ok = await confirm({
+        title: t('chat.clearConfirmTitle'),
+        description: t('chat.clearConfirmDescription'),
+        confirmText: t('chat.clearConfirmAction'),
+        cancelText: t('common.cancel'),
+        variant: 'danger',
+      })
+      if (!ok) break
       try {
         const result = await store.clearChatHistory(props.workspaceId)
         const runtime = result.runtime_context
@@ -411,6 +421,10 @@ async function sendMessage() {
 
   if (commands.length > 0) {
     for (const cmdName of commands) {
+      if (cmdName === 'clear') {
+        void executeSlashCommand(cmdName)
+        continue
+      }
       const mentionedAgent = mentions.length > 0
         ? agents.value.find(a => a.instance_id === mentions[0])
         : undefined
@@ -421,7 +435,7 @@ async function sendMessage() {
   }
 
   const slashMatch = text.match(/^\/([a-zA-Z]\w*)(?![/])/)
-  if (slashMatch) {
+  if (slashMatch && slashMatch[1].toLowerCase() !== 'clear') {
     const cmd = slashMatch[1].toLowerCase()
     const arg = text.slice(slashMatch[0].length).trim().replace(/^@/, '')
     void executeSlashCommand(cmd, arg || undefined)
@@ -602,17 +616,6 @@ const editor = useEditor({
             nextTick(() => {
               void executeSlashCommand(p.id)
             })
-            return
-          }
-          if (p.id === 'clear') {
-            const nodeAfter = ed.view.state.selection.$to.nodeAfter
-            const overrideSpace = nodeAfter?.text?.startsWith(' ')
-            if (overrideSpace) range.to += 1
-            ed.chain().focus().insertContentAt(range, [
-              { type: 'slashCommand', attrs: { id: p.id, label: p.label } },
-              { type: 'text', text: ' ' },
-            ]).run()
-            window.getSelection()?.collapseToEnd()
             return
           }
           if (p.needsAgent) {
@@ -1253,10 +1256,12 @@ function updateSuggestionIndex(state: SuggestionState, idx: number) {
               </span>
               <span
                 class="ml-auto text-[10px] px-1.5 py-0.5 rounded-full shrink-0"
-                :class="item.immediate
-                  ? 'bg-green-500/15 text-green-600 dark:text-green-400'
-                  : 'bg-primary/10 text-primary'"
-              >{{ item.immediate ? t('chat.immediate') : (item.badge || t('chat.commandTag')) }}</span>
+                :class="item.badge
+                  ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                  : item.immediate
+                    ? 'bg-green-500/15 text-green-600 dark:text-green-400'
+                    : 'bg-primary/10 text-primary'"
+              >{{ item.badge || (item.immediate ? t('chat.immediate') : t('chat.commandTag')) }}</span>
             </Button>
           </div>
         </div>
