@@ -1,3 +1,4 @@
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -103,12 +104,13 @@ def _ctx() -> _DeployContext:
 @pytest.mark.asyncio
 async def test_execute_rebuild_pipeline_uses_current_k8s_builder_signatures(monkeypatch) -> None:
     fake_k8s = _FakeK8s()
-    record = SimpleNamespace(status=DeployStatus.running, message=None, finished_at=None)
+    record = SimpleNamespace(status=DeployStatus.running, message=None, finished_at=None, config_snapshot=None)
     instance = SimpleNamespace(
         status=InstanceStatus.rebuilding,
         available_replicas=0,
     )
     db = _FakeDb([
+        record,
         SimpleNamespace(id="cluster-1", ingress_class="nginx"),
         record,
         instance,
@@ -172,4 +174,5 @@ async def test_execute_rebuild_pipeline_uses_current_k8s_builder_signatures(monk
     assert deployment.metadata.name == "hermes-1"
     assert deployment.spec.template.spec.image_pull_secrets[0].name == "nodeskclaw-registry"
     assert record.status == DeployStatus.success
+    assert json.loads(record.config_snapshot)[deploy_service.PROGRESS_STEP_NAMES_KEY] == deploy_service.REBUILD_STEPS
     assert instance.status == InstanceStatus.running
