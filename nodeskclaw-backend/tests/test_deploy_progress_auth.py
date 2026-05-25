@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncGenerator
 from types import SimpleNamespace
 
@@ -11,7 +12,7 @@ from app.core.deps import get_db
 from app.core.exceptions import ForbiddenError, NotFoundError, register_exception_handlers
 from app.core.security import get_current_user
 from app.schemas.deploy import DeployProgress
-from app.services.k8s.event_bus import SSEEvent
+from app.services.k8s.event_bus import EventBus, SSEEvent
 
 
 def _make_app(router, prefix: str) -> FastAPI:
@@ -47,6 +48,32 @@ def _success_snapshot(deploy_id: str = "deploy-1") -> DeployProgress:
     )
 
 
+def _final_event(deploy_id: str = "deploy-1") -> SSEEvent:
+    return SSEEvent(
+        event="deploy_progress",
+        data={
+            "deploy_id": deploy_id,
+            "step": 1,
+            "total_steps": 1,
+            "current_step": "完成",
+            "status": "success",
+            "message": "部署成功",
+            "percent": 100,
+        },
+    )
+
+
+def test_event_bus_subscription_cleanup_is_idempotent():
+    event_bus = EventBus()
+    _queue, cleanup = event_bus.create_subscription("deploy_progress")
+
+    assert event_bus.subscriber_count("deploy_progress") == 1
+    cleanup()
+    cleanup()
+
+    assert event_bus.subscriber_count("deploy_progress") == 0
+
+
 @pytest.mark.asyncio
 async def test_portal_progress_requires_auth(monkeypatch):
     app = _make_app(portal_deploy_api.router, "/deploy")
@@ -61,6 +88,11 @@ async def test_portal_progress_requires_auth(monkeypatch):
         portal_deploy_api.deploy_service,
         "require_deploy_progress_instance_access",
         fail_if_called,
+    )
+    monkeypatch.setattr(
+        portal_deploy_api.event_bus,
+        "create_subscription",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("subscription should not be created without auth")),
     )
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -95,6 +127,11 @@ async def test_portal_progress_denies_user_without_instance_access(monkeypatch):
         "get_deploy_progress_snapshot",
         fail_snapshot,
     )
+    monkeypatch.setattr(
+        portal_deploy_api.event_bus,
+        "create_subscription",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("subscription should not be created without access")),
+    )
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/deploy/progress/deploy-1")
@@ -108,6 +145,7 @@ async def test_portal_progress_replays_snapshot_for_viewer(monkeypatch):
     app = _make_app(portal_deploy_api.router, "/deploy")
     app.dependency_overrides[get_current_user] = lambda: _user()
     app.dependency_overrides[get_db] = _override_db
+    cleanup_called = 0
 
     async def allow_access(deploy_id, _db, user):
         assert deploy_id == "deploy-1"
@@ -116,6 +154,16 @@ async def test_portal_progress_replays_snapshot_for_viewer(monkeypatch):
 
     async def get_snapshot(deploy_id, _db):
         return _success_snapshot(deploy_id)
+
+    def create_subscription(*topics):
+        assert topics == ("deploy_progress",)
+        queue: asyncio.Queue[SSEEvent] = asyncio.Queue()
+
+        def cleanup():
+            nonlocal cleanup_called
+            cleanup_called += 1
+
+        return queue, cleanup
 
     monkeypatch.setattr(
         portal_deploy_api.deploy_service,
@@ -127,6 +175,7 @@ async def test_portal_progress_replays_snapshot_for_viewer(monkeypatch):
         "get_deploy_progress_snapshot",
         get_snapshot,
     )
+    monkeypatch.setattr(portal_deploy_api.event_bus, "create_subscription", create_subscription)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/deploy/progress/deploy-1")
@@ -134,6 +183,7 @@ async def test_portal_progress_replays_snapshot_for_viewer(monkeypatch):
     assert response.status_code == 200
     assert "event: deploy_progress" in response.text
     assert '"status": "success"' in response.text
+    assert cleanup_called == 1
 
 
 @pytest.mark.asyncio
@@ -161,6 +211,11 @@ async def test_admin_progress_returns_not_found_for_other_org(monkeypatch):
         "get_deploy_progress_snapshot",
         fail_snapshot,
     )
+    monkeypatch.setattr(
+        admin_deploy_api.event_bus,
+        "create_subscription",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("subscription should not be created without access")),
+    )
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/admin/deploy/progress/deploy-1")
@@ -174,6 +229,7 @@ async def test_admin_progress_replays_snapshot_for_same_org(monkeypatch):
     app = _make_app(admin_deploy_api.router, "/admin/deploy")
     app.dependency_overrides[get_current_user] = lambda: _user(current_org_id="org-1")
     app.dependency_overrides[get_db] = _override_db
+    cleanup_called = 0
 
     async def allow_org_access(deploy_id, _db, org_id):
         assert deploy_id == "deploy-1"
@@ -182,6 +238,16 @@ async def test_admin_progress_replays_snapshot_for_same_org(monkeypatch):
 
     async def get_snapshot(deploy_id, _db):
         return _success_snapshot(deploy_id)
+
+    def create_subscription(*topics):
+        assert topics == ("deploy_progress",)
+        queue: asyncio.Queue[SSEEvent] = asyncio.Queue()
+
+        def cleanup():
+            nonlocal cleanup_called
+            cleanup_called += 1
+
+        return queue, cleanup
 
     monkeypatch.setattr(
         admin_deploy_api.deploy_service,
@@ -193,6 +259,7 @@ async def test_admin_progress_replays_snapshot_for_same_org(monkeypatch):
         "get_deploy_progress_snapshot",
         get_snapshot,
     )
+    monkeypatch.setattr(admin_deploy_api.event_bus, "create_subscription", create_subscription)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/admin/deploy/progress/deploy-1")
@@ -200,33 +267,34 @@ async def test_admin_progress_replays_snapshot_for_same_org(monkeypatch):
     assert response.status_code == 200
     assert "event: deploy_progress" in response.text
     assert '"status": "success"' in response.text
+    assert cleanup_called == 1
 
 
 @pytest.mark.asyncio
-async def test_progress_stream_subscribes_after_access_check_for_running_record(monkeypatch):
+async def test_portal_progress_keeps_final_event_published_during_snapshot_check(monkeypatch):
     app = _make_app(portal_deploy_api.router, "/deploy")
     app.dependency_overrides[get_current_user] = lambda: _user()
     app.dependency_overrides[get_db] = _override_db
+    queue: asyncio.Queue[SSEEvent] = asyncio.Queue()
+    calls: list[str] = []
 
     async def allow_access(*_args, **_kwargs):
+        calls.append("access")
         return "instance-1"
 
     async def no_snapshot(*_args, **_kwargs):
+        calls.append("snapshot")
+        queue.put_nowait(_final_event())
         return None
 
-    async def subscribe(_topic):
-        yield SSEEvent(
-            event="deploy_progress",
-            data={
-                "deploy_id": "deploy-1",
-                "step": 1,
-                "total_steps": 1,
-                "current_step": "完成",
-                "status": "success",
-                "message": "部署成功",
-                "percent": 100,
-            },
-        )
+    def create_subscription(*topics):
+        assert topics == ("deploy_progress",)
+        calls.append("subscribe")
+
+        def cleanup():
+            calls.append("cleanup")
+
+        return queue, cleanup
 
     monkeypatch.setattr(
         portal_deploy_api.deploy_service,
@@ -238,7 +306,7 @@ async def test_progress_stream_subscribes_after_access_check_for_running_record(
         "get_deploy_progress_snapshot",
         no_snapshot,
     )
-    monkeypatch.setattr(portal_deploy_api.event_bus, "subscribe", subscribe)
+    monkeypatch.setattr(portal_deploy_api.event_bus, "create_subscription", create_subscription)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/deploy/progress/deploy-1")
@@ -246,3 +314,51 @@ async def test_progress_stream_subscribes_after_access_check_for_running_record(
     assert response.status_code == 200
     assert "event: deploy_progress" in response.text
     assert '"deploy_id": "deploy-1"' in response.text
+    assert calls == ["access", "subscribe", "snapshot", "cleanup"]
+
+
+@pytest.mark.asyncio
+async def test_admin_progress_keeps_final_event_published_during_snapshot_check(monkeypatch):
+    app = _make_app(admin_deploy_api.router, "/admin/deploy")
+    app.dependency_overrides[get_current_user] = lambda: _user(current_org_id="org-1")
+    app.dependency_overrides[get_db] = _override_db
+    queue: asyncio.Queue[SSEEvent] = asyncio.Queue()
+    calls: list[str] = []
+
+    async def allow_access(*_args, **_kwargs):
+        calls.append("access")
+        return "instance-1"
+
+    async def no_snapshot(*_args, **_kwargs):
+        calls.append("snapshot")
+        queue.put_nowait(_final_event())
+        return None
+
+    def create_subscription(*topics):
+        assert topics == ("deploy_progress",)
+        calls.append("subscribe")
+
+        def cleanup():
+            calls.append("cleanup")
+
+        return queue, cleanup
+
+    monkeypatch.setattr(
+        admin_deploy_api.deploy_service,
+        "require_deploy_progress_org_access",
+        allow_access,
+    )
+    monkeypatch.setattr(
+        admin_deploy_api.deploy_service,
+        "get_deploy_progress_snapshot",
+        no_snapshot,
+    )
+    monkeypatch.setattr(admin_deploy_api.event_bus, "create_subscription", create_subscription)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/admin/deploy/progress/deploy-1")
+
+    assert response.status_code == 200
+    assert "event: deploy_progress" in response.text
+    assert '"deploy_id": "deploy-1"' in response.text
+    assert calls == ["access", "subscribe", "snapshot", "cleanup"]
