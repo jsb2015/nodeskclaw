@@ -43,6 +43,30 @@ def _publish(deploy_id: str, event: str, data: dict[str, Any]) -> None:
     event_bus.publish(_WS_DEPLOY_CHANNEL, payload)
 
 
+def _mark_agent_add_workspace_failed(
+    agents_progress: list[dict],
+    index: int,
+    error_msg: str,
+) -> None:
+    if index < len(agents_progress):
+        agents_progress[index] = {
+            **agents_progress[index],
+            "status": "add_workspace_failed",
+            "step": "add_workspace",
+            "error": error_msg,
+        }
+
+
+def _workspace_deploy_final_counts(
+    total_agents: int,
+    workspace_added_indices: set[int],
+) -> tuple[int, int, str]:
+    success_n = len(workspace_added_indices)
+    fail_n = total_agents - success_n
+    final_status = "success" if fail_n == 0 else "partial_success"
+    return success_n, fail_n, final_status
+
+
 async def _get_org_cluster(
     db: AsyncSession,
     cluster_id: str,
@@ -669,6 +693,7 @@ async def _run_deploy_pipeline_inner(workspace_deploy_id: str) -> None:
     _publish(workspace_deploy_id, "phase", {"phase": "setup_topology", "message": "配置拓扑"})
 
     user_id = deploy_user_id
+    workspace_added_indices: set[int] = set()
     for i, spec in enumerate(agent_specs):
         if i not in instance_by_index:
             continue
@@ -693,15 +718,18 @@ async def _run_deploy_pipeline_inner(workspace_deploy_id: str) -> None:
                     ),
                     user_id,
                 )
+                workspace_added_indices.add(i)
                 _publish(
                     workspace_deploy_id, "agent_progress",
                     {"display_name": name_base, "status": "success", "index": i},
                 )
             except Exception as e:
+                error_msg = str(e)
                 logger.error("add_agent failed: %s", e)
+                _mark_agent_add_workspace_failed(agents_progress, i, error_msg)
                 _publish(
                     workspace_deploy_id, "agent_progress",
-                    {"display_name": name_base, "status": "add_workspace_failed", "error": str(e), "index": i},
+                    {"display_name": name_base, "status": "add_workspace_failed", "error": error_msg, "index": i},
                 )
 
     async with async_session_factory() as db_topo:
@@ -709,9 +737,10 @@ async def _run_deploy_pipeline_inner(workspace_deploy_id: str) -> None:
             db_topo, workspace_id, user_id, topo_snap, human_specs,
         )
 
-    success_n = len(instance_by_index)
-    fail_n = len(agent_specs) - success_n
-    final_status = "success" if fail_n == 0 else "partial_success"
+    success_n, fail_n, final_status = _workspace_deploy_final_counts(
+        len(agent_specs),
+        workspace_added_indices,
+    )
 
     async with async_session_factory() as db:
         r = await db.execute(
@@ -721,11 +750,14 @@ async def _run_deploy_pipeline_inner(workspace_deploy_id: str) -> None:
         if wd:
             wd.status = final_status
             detail = dict(wd.progress_detail or {})
+            detail["agents"] = agents_progress
             detail["current_phase"] = "done"
             detail["phases_completed"] = [
                 "create_workspace", "deploy_agents", "install_genes", "setup_topology",
             ]
             wd.progress_detail = detail
+            wd.completed_agents = success_n
+            wd.failed_agents = fail_n
             await db.commit()
 
     _publish(
