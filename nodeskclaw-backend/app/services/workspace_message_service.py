@@ -12,9 +12,10 @@ from app.services.agent_output_sanitizer import strip_think_blocks
 logger = logging.getLogger(__name__)
 
 NO_REPLY_TOKEN = "NO_REPLY"
-_NO_REPLY_VARIANTS = frozenset({"no", "no_reply", "no reply", "noreply"})
+_NO_REPLY_VARIANTS = frozenset({"no_reply", "no reply", "noreply"})
 _NO_REPLY_PREFIX_VARIANTS = ("no_", "no_r", "no_re", "no_rep", "no_repl", "no_reply")
 _NO_REPLY_STRIP_CHARS = " \t\r\n*_~.。！？!?,，;；:：…—-()[]{}<>\"'"
+_NO_REPLY_PREFIX_STRIP_CHARS = _NO_REPLY_STRIP_CHARS.replace("_", "")
 DEFAULT_COLLABORATION_DEPTH = 3
 ABSOLUTE_MAX_COLLABORATION_DEPTH = 20
 
@@ -298,19 +299,30 @@ def build_context_prompt(
 def is_no_reply(text: str) -> bool:
     """Check if text is a silent-skip response that should not be shown to users.
 
-    Matches exact tokens ("NO", "NO_REPLY", "no reply", "noreply") and responses where
+    Matches exact tokens ("NO_REPLY", "no reply", "noreply") and responses where
     the agent prepends filler text before the token (e.g. "这不是给我的\\nNO_REPLY").
-    Exact bare "NO" is treated as an agent silent-skip marker because OpenClaw may
-    emit it for no-reply.
+    Bare "NO" / "no" is intentionally preserved as visible content.
     """
-    def normalize_token(value: str) -> str:
-        return value.strip().lower().strip(_NO_REPLY_STRIP_CHARS)
+    def normalize_token(value: str, *, keep_underscore: bool = False) -> str:
+        strip_chars = _NO_REPLY_PREFIX_STRIP_CHARS if keep_underscore else _NO_REPLY_STRIP_CHARS
+        return value.strip().lower().strip(strip_chars)
 
     cleaned = strip_think_blocks(text)
     normalized = normalize_token(cleaned)
-    if normalized in _NO_REPLY_VARIANTS or normalized in _NO_REPLY_PREFIX_VARIANTS:
+    normalized_prefix = normalize_token(cleaned, keep_underscore=True)
+    if normalized in _NO_REPLY_VARIANTS or normalized_prefix in _NO_REPLY_PREFIX_VARIANTS:
         return True
-    lines = [normalize_token(ln) for ln in cleaned.strip().splitlines() if ln.strip()]
-    if lines and (lines[-1] in _NO_REPLY_VARIANTS or lines[-1] in _NO_REPLY_PREFIX_VARIANTS):
+    lines = [
+        (
+            normalize_token(ln),
+            normalize_token(ln, keep_underscore=True),
+        )
+        for ln in cleaned.strip().splitlines()
+        if ln.strip()
+    ]
+    if lines and (
+        lines[-1][0] in _NO_REPLY_VARIANTS
+        or lines[-1][1] in _NO_REPLY_PREFIX_VARIANTS
+    ):
         return True
     return False
