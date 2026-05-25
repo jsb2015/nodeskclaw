@@ -1,6 +1,11 @@
 import io
 import json
+import os
+import subprocess
+import sys
+import threading
 import zipfile
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -124,6 +129,7 @@ async def require_test_db():
         "p0_echo_agent",
         "p1_template_import_agent",
         "p2_stateful_local_agent",
+        "p2a_external_service_agent",
         "p3_resource_profile_agent",
         "p4_oauth_probe_agent",
         "p5_video_clone_mock_agent",
@@ -358,6 +364,47 @@ def test_bundle_env_vars_filter_secret_values_and_keep_refs() -> None:
     assert env["OAUTH_TOKEN_REF"] == "mock-oauth-token/access_token"
     assert "OAUTH_ACCESS_TOKEN" not in env
     assert "NODESKCLAW_SECRET_REFS" in env
+
+
+def test_external_service_probe_script_calls_configured_service() -> None:
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            body = json.dumps({"ok": True, "path": self.path}).encode()
+            self.send_response(200)
+            self.send_header("content-type", "application/json")
+            self.send_header("content-length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *_args):
+            return None
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        script = FIXTURES / "p2a_external_service_agent" / "skills" / "external-service-probe" / "scripts" / "probe_external.py"
+        env = {
+            **os.environ,
+            "EXTERNAL_API_BASE": f"http://127.0.0.1:{server.server_port}",
+            "EXTERNAL_API_PATH": "/probe",
+        }
+        result = subprocess.run(
+            [sys.executable, str(script)],
+            env=env,
+            text=True,
+            capture_output=True,
+            check=True,
+            timeout=10,
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is True
+    assert payload["status"] == 200
+    assert payload["path"].startswith("/probe")
 
 
 def test_secret_env_refs_are_injected_as_k8s_secret_refs_not_configmap_data() -> None:
