@@ -12,7 +12,7 @@
     }
   ],
   "env": {
-    "DESKCLAW_TRUSTED_OAUTH_EXCHANGE_URL": "http://mock-oauth-broker.local/exchange",
+    "DESKCLAW_TRUSTED_OAUTH_EXCHANGE_URL": "http://mock-oauth-broker/exchange",
     "OAUTH_TOKEN_REF": "mock-oauth-token/access_token"
   }
 }
