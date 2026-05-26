@@ -618,35 +618,20 @@ async def get_performance(
     failed = sum(1 for t in rows if t.status == "failed")
     completion_rate = done / total if total > 0 else 0.0
     total_value = sum(t.actual_value or 0 for t in rows if t.status in ("done", "archived"))
-    from app.models.workspace_agent import WorkspaceAgent
     from app.models.llm_usage_log import LlmUsageLog
 
-    agent_q = await db.execute(
-        sa_select(WorkspaceAgent.instance_id).where(
-            WorkspaceAgent.workspace_id == workspace_id,
-            WorkspaceAgent.deleted_at.is_(None),
-        )
-    )
-    ws_instance_ids = [r[0] for r in agent_q.all()]
-
-    total_tokens = 0
-    total_prompt = 0
-    total_completion = 0
-    filter_ids = ws_instance_ids
+    llm_q = sa_select(
+        func.coalesce(func.sum(LlmUsageLog.total_tokens), 0),
+        func.coalesce(func.sum(LlmUsageLog.prompt_tokens), 0),
+        func.coalesce(func.sum(LlmUsageLog.completion_tokens), 0),
+    ).where(LlmUsageLog.workspace_id == workspace_id)
     if instance_id:
-        filter_ids = [instance_id] if instance_id in ws_instance_ids else []
-    if filter_ids:
-        llm_result = await db.execute(
-            sa_select(
-                func.coalesce(func.sum(LlmUsageLog.total_tokens), 0),
-                func.coalesce(func.sum(LlmUsageLog.prompt_tokens), 0),
-                func.coalesce(func.sum(LlmUsageLog.completion_tokens), 0),
-            ).where(LlmUsageLog.instance_id.in_(filter_ids))
-        )
-        llm_row = llm_result.one()
-        total_tokens = int(llm_row[0])
-        total_prompt = int(llm_row[1])
-        total_completion = int(llm_row[2])
+        llm_q = llm_q.where(LlmUsageLog.instance_id == instance_id)
+    llm_result = await db.execute(llm_q)
+    llm_row = llm_result.one()
+    total_tokens = int(llm_row[0])
+    total_prompt = int(llm_row[1])
+    total_completion = int(llm_row[2])
 
     roi = total_value / total_tokens * 1000 if total_tokens > 0 else 0.0
 
@@ -933,6 +918,7 @@ async def attribute_tokens_to_tasks(
             func.coalesce(func.sum(LlmUsageLog.prompt_tokens), 0),
             func.coalesce(func.sum(LlmUsageLog.completion_tokens), 0),
         ).where(
+            LlmUsageLog.workspace_id == workspace_id,
             LlmUsageLog.instance_id == task.assignee_instance_id,
             LlmUsageLog.created_at >= task.created_at,
         )
@@ -959,18 +945,7 @@ async def get_workspace_token_usage(
 ):
     """Aggregate LLM token usage for a workspace, grouped by provider and model."""
     await wm_service.check_workspace_member(workspace_id, user, db)
-    from app.models.workspace_agent import WorkspaceAgent
     from app.models.llm_usage_log import LlmUsageLog
-
-    agent_q = await db.execute(
-        sa_select(WorkspaceAgent.instance_id).where(
-            WorkspaceAgent.workspace_id == workspace_id,
-            WorkspaceAgent.deleted_at.is_(None),
-        )
-    )
-    instance_ids = [r[0] for r in agent_q.all()]
-    if not instance_ids:
-        return _ok({"total_prompt_tokens": 0, "total_completion_tokens": 0, "total_tokens": 0, "by_provider": []})
 
     rows = await db.execute(
         sa_select(
@@ -981,7 +956,7 @@ async def get_workspace_token_usage(
             func.sum(LlmUsageLog.total_tokens),
             func.count(),
         ).where(
-            LlmUsageLog.instance_id.in_(instance_ids),
+            LlmUsageLog.workspace_id == workspace_id,
         ).group_by(LlmUsageLog.provider, LlmUsageLog.model)
     )
 
@@ -1464,6 +1439,53 @@ class SystemMessageRequest(BaseModel):
     content: str
 
 
+async def _clear_instance_runtime_context(
+    instance: Instance,
+    workspace_id: str,
+    db: AsyncSession,
+) -> dict:
+    runtime = instance.runtime or "openclaw"
+    result = {
+        "agent_id": instance.id,
+        "agent_name": instance.agent_display_name or instance.name,
+        "runtime": runtime,
+        "cleared": False,
+        "skipped": False,
+        "error": None,
+    }
+    if runtime not in {"openclaw", "hermes"}:
+        result["skipped"] = True
+        return result
+
+    try:
+        from app.services.nfs_mount import remote_fs
+
+        async with remote_fs(instance, db) as fs:
+            if runtime == "hermes":
+                from app.services.hermes_session import clear_workspace_session
+
+                result["cleared"] = bool(await clear_workspace_session(fs, workspace_id))
+            else:
+                from app.services.openclaw_session import clear_main_session
+                from app.services.openclaw_session import clear_workspace_session
+
+                cleared = await clear_workspace_session(fs, workspace_id)
+                if not cleared:
+                    cleared = await clear_main_session(fs)
+                result["cleared"] = bool(cleared)
+    except Exception as e:
+        logger.warning(
+            "clear_workspace_messages: 清理 runtime 上下文失败 workspace=%s instance=%s runtime=%s error=%s",
+            workspace_id,
+            instance.id,
+            runtime,
+            e,
+        )
+        result["error"] = str(e)
+
+    return result
+
+
 @router.post("/{workspace_id}/messages/clear")
 async def clear_workspace_messages(
     workspace_id: str,
@@ -1473,60 +1495,49 @@ async def clear_workspace_messages(
     await wm_service.check_workspace_access(workspace_id, user, "manage_settings", db)
 
     cleared_count = await msg_service.clear_workspace_messages(db, workspace_id)
-
-    repaired_instances: list[str] = []
-    restart_failures: list[str] = []
-
-    result = await db.execute(
-        sa_select(Instance)
-        .join(
-            WorkspaceAgent,
-            (WorkspaceAgent.instance_id == Instance.id) & (WorkspaceAgent.deleted_at.is_(None)),
-        )
+    rows = (await db.execute(
+        sa_select(WorkspaceAgent, Instance)
+        .join(Instance, Instance.id == WorkspaceAgent.instance_id)
         .where(
             WorkspaceAgent.workspace_id == workspace_id,
+            WorkspaceAgent.deleted_at.is_(None),
             Instance.deleted_at.is_(None),
-            Instance.runtime.in_(["openclaw", "hermes"]),
         )
+    )).all()
+    runtime_results = [
+        await _clear_instance_runtime_context(instance, workspace_id, db)
+        for _agent, instance in rows
+    ]
+    runtime_context = {
+        "total": len(runtime_results),
+        "cleared_count": sum(1 for item in runtime_results if item["cleared"]),
+        "skipped_count": sum(1 for item in runtime_results if item["skipped"]),
+        "failed_count": sum(1 for item in runtime_results if item["error"]),
+        "results": runtime_results,
+    }
+    logger.info(
+        "clear_workspace_messages: workspace=%s user=%s messages=%s runtime_total=%s runtime_cleared=%s runtime_failed=%s",
+        workspace_id,
+        getattr(user, "id", None),
+        cleared_count,
+        runtime_context["total"],
+        runtime_context["cleared_count"],
+        runtime_context["failed_count"],
     )
-    instances = list(result.scalars().all())
 
-    if instances:
-        from app.services.llm_config_service import restart_runtime
-        from app.services.nfs_mount import remote_fs
-        from app.services.openclaw_session import clear_main_session
-        from app.services.hermes_session import clear_workspace_session
-
-        for instance in instances:
-            try:
-                async with remote_fs(instance, db) as fs:
-                    if instance.runtime == "hermes":
-                        await clear_workspace_session(fs, workspace_id)
-                    else:
-                        await clear_main_session(fs)
-                repaired_instances.append(instance.id)
-            except Exception:
-                logger.warning("clear_workspace_messages: failed to clear session for %s", instance.id, exc_info=True)
-                restart_failures.append(instance.id)
-                continue
-
-            try:
-                restart_result = await restart_runtime(instance, db)
-                if restart_result.get("status") != "ok":
-                    restart_failures.append(instance.id)
-            except Exception:
-                logger.warning("clear_workspace_messages: failed to restart runtime for %s", instance.id, exc_info=True)
-                restart_failures.append(instance.id)
-
+    runtime_context_summary = {
+        "total": runtime_context["total"],
+        "cleared_count": runtime_context["cleared_count"],
+        "skipped_count": runtime_context["skipped_count"],
+        "failed_count": runtime_context["failed_count"],
+    }
     broadcast_event(workspace_id, "chat:cleared", {
         "cleared_count": cleared_count,
-        "repaired_instances": repaired_instances,
-        "restart_failures": restart_failures,
+        "runtime_context": runtime_context_summary,
     })
     return _ok({
         "cleared_count": cleared_count,
-        "repaired_instances": repaired_instances,
-        "restart_failures": restart_failures,
+        "runtime_context": runtime_context,
     })
 
 
