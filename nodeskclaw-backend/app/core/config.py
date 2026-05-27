@@ -155,14 +155,14 @@ class Settings(BaseSettings):
 
     # ── Skill Registries ─────────────────────────────────
     # JSON array of registry configs:
-    # [{"type":"genehub","id":"deskhub","url":"https://skills.deskclaw.me","api_key":"","name":"DeskHub"},
+    # [{"type":"deskhub","id":"deskhub","url":"https://skills.deskclaw.me","api_key":"","name":"DeskHub"},
     #  {"type":"clawhub","id":"clawhub","url":"https://clawhub.ai","api_key":"","name":"ClawHub"}]
     SKILL_REGISTRIES: str = ""
 
-    # Legacy — non-empty value auto-registers as type=genehub, id=genehub adapter
-    GENEHUB_REGISTRY_URL: str = "https://skills.deskclaw.me"
-    GENEHUB_API_KEY: str = ""
-    GENEHUB_WEB_URL: str = "https://skills.deskclaw.me"
+    # Non-empty value auto-registers as type=deskhub, id=deskhub adapter
+    DESKHUB_REGISTRY_URL: str = ""
+    DESKHUB_API_KEY: str = ""
+    DESKHUB_WEB_URL: str = ""
 
     # ── S3 兼容对象存储 ─────────────────────────────────
     S3_ENDPOINT: str = ""

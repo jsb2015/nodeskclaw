@@ -121,7 +121,7 @@ Security layer tag format: `v{VERSION}-sec` (e.g. `v2026.3.13-sec`).
 1. `node:22-bookworm-slim` base image
 2. apt install system dependencies: git, openssh-client, python3, jq, curl, etc.
 3. pip install Python dependencies: requests, tos
-4. `npm install -g openclaw@${VERSION} @nodeskai/genehub`
+4. `npm install -g openclaw@${VERSION}`
 5. Pre-create `/root/.openclaw/` directory tree (agents, config, credentials, extensions, skills, etc.)
 6. COPY config template `openclaw.json.template` and startup scripts
 7. Write version marker to `/root/.openclaw-version`

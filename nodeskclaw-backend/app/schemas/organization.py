@@ -104,4 +104,4 @@ class OrgRequiredGeneInfo(BaseModel):
 class CheckAgentGenesResponse(BaseModel):
     missing_genes: list[OrgRequiredGeneInfo]
     all_installed: bool
-    genehub_web_url: str
+    deskhub_web_url: str

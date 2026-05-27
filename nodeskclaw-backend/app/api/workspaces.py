@@ -223,7 +223,7 @@ async def check_agent_genes(
     )).all()
 
     if not required_rows:
-        return _ok({"missing_genes": [], "all_installed": True, "genehub_web_url": settings.GENEHUB_WEB_URL})
+        return _ok({"missing_genes": [], "all_installed": True, "deskhub_web_url": settings.DESKHUB_WEB_URL})
 
     installed_result = await db.execute(
         sa_select(Gene.slug).join(InstanceGene, InstanceGene.gene_id == Gene.id).where(
@@ -250,7 +250,7 @@ async def check_agent_genes(
     return _ok({
         "missing_genes": missing,
         "all_installed": len(missing) == 0,
-        "genehub_web_url": settings.GENEHUB_WEB_URL,
+        "deskhub_web_url": settings.DESKHUB_WEB_URL,
     })
 
 

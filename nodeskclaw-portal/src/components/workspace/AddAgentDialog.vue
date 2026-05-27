@@ -56,7 +56,7 @@ const search = ref('')
 
 const geneDialogInstanceId = ref<string | null>(null)
 const missingGenes = ref<MissingGene[]>([])
-const genehubWebUrl = ref('')
+const deskhubWebUrl = ref('')
 const geneChecking = ref(false)
 
 const ADDING_STEPS_WITH_GENE = computed(() => [
@@ -137,9 +137,9 @@ function close() {
   emit('update:visible', false)
 }
 
-function geneHubLink(slug: string): string {
-  if (!genehubWebUrl.value) return ''
-  return `${genehubWebUrl.value.replace(/\/$/, '')}/genes/${slug}`
+function deskHubLink(slug: string): string {
+  if (!deskhubWebUrl.value) return ''
+  return `${deskhubWebUrl.value.replace(/\/$/, '')}/genes/${slug}`
 }
 
 async function addToWorkspace(instanceId: string) {
@@ -149,7 +149,7 @@ async function addToWorkspace(instanceId: string) {
       params: { instance_id: instanceId },
     })
     const data = res.data.data
-    genehubWebUrl.value = data.genehub_web_url || ''
+    deskhubWebUrl.value = data.deskhub_web_url || ''
 
     if (data.all_installed) {
       geneChecking.value = false
@@ -425,12 +425,12 @@ async function doAddAgent(instanceId: string, installSlugs: string[]) {
                     </p>
                   </div>
                   <a
-                    v-if="geneHubLink(gene.gene_slug)"
-                    :href="geneHubLink(gene.gene_slug)"
+                    v-if="deskHubLink(gene.gene_slug)"
+                    :href="deskHubLink(gene.gene_slug)"
                     target="_blank"
                     rel="noopener noreferrer"
                     class="shrink-0 p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                    :title="t('addAgentView.viewOnGeneHub')"
+                    :title="t('addAgentView.viewOnDeskHub')"
                   >
                     <ExternalLink class="w-3.5 h-3.5" />
                   </a>

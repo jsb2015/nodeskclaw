@@ -321,25 +321,15 @@ async def lifespan(app: FastAPI):
             from app.models.gene import Gene as _GeneModel
             from sqlalchemy import update as _sa_update
 
-            _sr_count_ext = await _sr_db.execute(
+            _sr_count = await _sr_db.execute(
                 _sa_update(_GeneModel)
                 .where(
                     _GeneModel.source_registry.is_(None),
                     _GeneModel.deleted_at.is_(None),
-                    _GeneModel.source.notin_(["manual", "agent"]),
-                )
-                .values(source_registry="genehub")
-            )
-            _sr_count_local = await _sr_db.execute(
-                _sa_update(_GeneModel)
-                .where(
-                    _GeneModel.source_registry.is_(None),
-                    _GeneModel.deleted_at.is_(None),
-                    _GeneModel.source.in_(["manual", "agent"]),
                 )
                 .values(source_registry="local")
             )
-            _sr_total = (_sr_count_ext.rowcount or 0) + (_sr_count_local.rowcount or 0)
+            _sr_total = _sr_count.rowcount or 0
             if _sr_total > 0:
                 await _sr_db.commit()
                 logger.info("source_registry 回填完成: %d 条记录", _sr_total)
@@ -767,54 +757,15 @@ async def lifespan(app: FastAPI):
     logger.info("Security Pipeline 已初始化 (%d plugins)", _security_pipeline.plugin_count)
 
     # ── Registry Aggregator 初始化 ────────────────────
-    from app.services.registry_adapter import RegistryAdapter
     from app.services import registry_aggregator
-    from app.services.local_adapter import LocalAdapter
+    from app.services.registry_bootstrap import build_registry_adapters
 
-    _reg_adapters: list[RegistryAdapter] = [
-        LocalAdapter(session_factory=async_session_factory),
-    ]
-
-    _skill_registries_raw = settings.SKILL_REGISTRIES.strip()
-    _external_registry_configs: list[dict] = []
-    if _skill_registries_raw:
-        try:
-            _external_registry_configs = json.loads(_skill_registries_raw)
-            if not isinstance(_external_registry_configs, list):
-                logger.warning("SKILL_REGISTRIES 不是 JSON 数组，已忽略")
-                _external_registry_configs = []
-        except json.JSONDecodeError as _jde:
-            logger.warning("SKILL_REGISTRIES JSON 解析失败: %s", _jde)
-
-    if not _external_registry_configs and settings.GENEHUB_REGISTRY_URL:
-        _external_registry_configs.append({
-            "type": "genehub", "id": "genehub",
-            "url": settings.GENEHUB_REGISTRY_URL,
-            "api_key": settings.GENEHUB_API_KEY,
-            "name": "GeneHub",
-        })
-
-    for _rc in _external_registry_configs:
-        _rtype = _rc.get("type", "")
-        _rid = _rc.get("id", _rtype)
-        _rurl = _rc.get("url", "")
-        _rname = _rc.get("name", _rid)
-        _rkey = _rc.get("api_key", "")
-
-        if _rtype == "genehub" and _rurl:
-            from app.services.genehub_client import GeneHubAdapter
-            _reg_adapters.append(
-                GeneHubAdapter(registry_id=_rid, registry_name=_rname, base_url=_rurl, api_key=_rkey)
-            )
-            logger.info("已注册 GeneHubAdapter: %s (%s)", _rid, _rurl)
-        elif _rtype == "clawhub" and _rurl:
-            from app.services.clawhub_adapter import ClawHubAdapter
-            _reg_adapters.append(
-                ClawHubAdapter(registry_id=_rid, registry_name=_rname, base_url=_rurl, api_key=_rkey)
-            )
-            logger.info("已注册 ClawHubAdapter (stub): %s (%s)", _rid, _rurl)
-        else:
-            logger.warning("未知 registry type=%s, id=%s, 已跳过", _rtype, _rid)
+    _reg_adapters = build_registry_adapters(
+        session_factory=async_session_factory,
+        skill_registries_raw=settings.SKILL_REGISTRIES,
+        deskhub_registry_url=settings.DESKHUB_REGISTRY_URL,
+        deskhub_api_key=settings.DESKHUB_API_KEY,
+    )
 
     registry_aggregator.init(_reg_adapters)
     logger.info("RegistryAggregator 已初始化 (adapters=%s)", [a.registry_id for a in _reg_adapters])

@@ -55,6 +55,12 @@ from app.services.runtime.gene_install_adapter import GeneInstallAdapter
 
 logger = logging.getLogger(__name__)
 
+_REGISTRY_DISPLAY_NAMES = {
+    "local": "本地",
+    "deskhub": "DeskHub",
+    "clawhub": "ClawHub",
+}
+
 
 def _get_gene_install_adapter(runtime: str) -> GeneInstallAdapter:
     """Get the GeneInstallAdapter for a given runtime, falling back to NoopGeneInstallAdapter."""
@@ -360,6 +366,7 @@ def _validate_skill_metadata(
 
 
 def _gene_to_dict(gene: Gene) -> dict:
+    source_registry = getattr(gene, "source_registry", None)
     return {
         "id": gene.id,
         "name": gene.name,
@@ -386,7 +393,8 @@ def _gene_to_dict(gene: Gene) -> dict:
         "created_by": gene.created_by,
         "org_id": gene.org_id,
         "visibility": getattr(gene, "visibility", "public"),
-        "source_registry": getattr(gene, "source_registry", None),
+        "source_registry": source_registry,
+        "source_registry_name": _REGISTRY_DISPLAY_NAMES.get(source_registry or ""),
         "created_at": gene.created_at,
         "updated_at": gene.updated_at,
     }

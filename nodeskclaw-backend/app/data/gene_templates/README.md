@@ -6,9 +6,9 @@
 
 - 幂等：slug 已存在时自动对比并更新 manifest（Gene）/ gene_slugs + config_override + description（Genome）字段；name/tags 等用户可自定义字段不覆盖
 - 关闭：设置 `SEED_GENES=false` 后重启即可跳过导入
-- GeneHub 同步脚本：`scripts/upload_seeds_to_genehub.py`
+- DeskHub 同步脚本：`scripts/upload_seeds_to_deskhub.py`
 
-本目录 JSON 文件同时作为本地 seed 数据源和 GeneHub 上传的参考模板。
+本目录 JSON 文件同时作为本地 seed 数据源和 DeskHub 上传的参考模板。
 
 ## 目录结构
 
@@ -51,7 +51,7 @@ gene_templates/
 
 ## 分类
 
-| 类型 | 文件 | slug | GeneHub 状态 |
+| 类型 | 文件 | slug | DeskHub 状态 |
 |------|------|------|-------------|
 | 工具基因 | mcp_blackboard_tools.json | nodeskclaw-blackboard-tools | 待更新 |
 | 工具基因 | mcp_topology_awareness.json | nodeskclaw-topology-awareness | 已上传 |

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Upload local seed gene/genome templates to GeneHub Registry.
+"""Upload local seed gene/genome templates to DeskHub Registry.
 
 Usage:
-    export GENEHUB_REGISTRY_URL=https://genehub.nodeskai.com
-    export GENEHUB_API_KEY=ghb_xxx
-    python scripts/upload_seeds_to_genehub.py
+    export DESKHUB_REGISTRY_URL=https://skills.deskclaw.me
+    export DESKHUB_API_KEY=dhb_xxx
+    python scripts/upload_seeds_to_deskhub.py
 
 Or with --dry-run to preview without uploading:
-    python scripts/upload_seeds_to_genehub.py --dry-run
+    python scripts/upload_seeds_to_deskhub.py --dry-run
 """
 
 import json
@@ -106,7 +106,7 @@ def _map_tags(raw_tags: list[str]) -> list[str]:
 
 
 def build_gene_manifest(tpl: dict) -> dict:
-    """Convert a local gene template to the flat GeneHub manifest format."""
+    """Convert a local gene template to the flat DeskHub manifest format."""
     inner = tpl.get("manifest", {})
 
     default_compat = [{"product": "openclaw", "min_version": "0.5.0"}]
@@ -147,7 +147,7 @@ def build_gene_manifest(tpl: dict) -> dict:
 
 
 def build_genome_payload(tpl: dict) -> dict:
-    """Convert a local genome template to the GeneHub genome POST payload."""
+    """Convert a local genome template to the DeskHub genome POST payload."""
     gene_slugs = tpl.get("gene_slugs", [])
     genes = [{"slug": s, "version": ">=1.0.0", "required": True} for s in gene_slugs]
 
@@ -169,14 +169,14 @@ def build_genome_payload(tpl: dict) -> dict:
 def main() -> None:
     dry_run = "--dry-run" in sys.argv
 
-    registry_url = os.environ.get("GENEHUB_REGISTRY_URL", "").rstrip("/")
-    api_key = os.environ.get("GENEHUB_API_KEY", "")
+    registry_url = os.environ.get("DESKHUB_REGISTRY_URL", "").rstrip("/")
+    api_key = os.environ.get("DESKHUB_API_KEY", "")
 
     if not registry_url:
-        print("ERROR: GENEHUB_REGISTRY_URL not set")
+        print("ERROR: DESKHUB_REGISTRY_URL not set")
         sys.exit(1)
     if not api_key and not dry_run:
-        print("ERROR: GENEHUB_API_KEY not set")
+        print("ERROR: DESKHUB_API_KEY not set")
         sys.exit(1)
 
     print(f"Registry: {registry_url}")
@@ -255,7 +255,7 @@ def main() -> None:
             elif resp.status_code == 409:
                 published = _publish_gene(slug, manifest=manifest)
                 status = "EXIST+UPDATE" if published else "EXIST"
-                print(f"  {status}  {slug} (already on GeneHub)")
+                print(f"  {status}  {slug} (already on DeskHub)")
                 ok += 1
             else:
                 msg = body.get("message", resp.text[:120])
@@ -297,16 +297,16 @@ def main() -> None:
             elif resp.status_code == 409:
                 updated = _update_genome(tpl["slug"], payload)
                 status = "EXIST+UPDATE" if updated else "EXIST"
-                print(f"  {status}  {tpl['slug']} (already on GeneHub)")
+                print(f"  {status}  {tpl['slug']} (already on DeskHub)")
                 ok += 1
             else:
                 msg = body.get("message", resp.text[:120])
                 print(f"  WARN  {tpl['slug']} — {resp.status_code}: {msg}")
-                print(f"        (Genome POST may not be supported; try GeneHub Web UI)")
+                print(f"        (Genome POST may not be supported; try DeskHub Web UI)")
                 fail += 1
         except Exception as e:
             print(f"  WARN  {tpl['slug']} — {e}")
-            print(f"        (Genome POST may not be supported; try GeneHub Web UI)")
+            print(f"        (Genome POST may not be supported; try DeskHub Web UI)")
             fail += 1
 
     print()

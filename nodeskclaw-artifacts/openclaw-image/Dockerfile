@@ -49,7 +49,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # ---------- 全局安装 OpenClaw（BuildKit npm 缓存）----------
 RUN --mount=type=cache,target=/root/.npm \
     if [ -n "$NPM_REGISTRY" ]; then npm config set registry "$NPM_REGISTRY"; fi && \
-    npm install -g openclaw@${OPENCLAW_VERSION} @nodeskai/genehub
+    npm install -g openclaw@${OPENCLAW_VERSION}
 
 # ---------- 预置用户数据目录结构 ----------
 RUN mkdir -p /root/.openclaw/agents/main/sessions \

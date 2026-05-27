@@ -440,11 +440,11 @@ NetworkPolicy 相关配置项（通过「组织设置 > 网络」页面管理，
 
 | 变量 | 说明 |
 |------|------|
-| `SKILL_REGISTRIES` | JSON 数组，配置外部技能基因 Registry 列表。为空则仅使用本地数据库。示例：`[{"type":"genehub","id":"deskhub","url":"https://skills.deskclaw.me","api_key":"","name":"DeskHub"}]` |
-| `GENEHUB_REGISTRY_URL` | （旧版兼容）GeneHub Registry 地址。非空时自动注册为 type=genehub 的 adapter |
-| `GENEHUB_API_KEY` | （旧版兼容）GeneHub Registry API Key |
+| `SKILL_REGISTRIES` | JSON 数组，配置外部技能基因 Registry 列表。为空则仅使用本地数据库。示例：`[{"type":"deskhub","id":"deskhub","url":"https://skills.deskclaw.me","api_key":"","name":"DeskHub"}]` |
+| `DESKHUB_REGISTRY_URL` | DeskHub Registry 地址。非空时自动注册为 type=deskhub 的 adapter |
+| `DESKHUB_API_KEY` | DeskHub Registry API Key |
 
-支持的 adapter 类型：`genehub`（GeneHub/DeskHub 协议）、`clawhub`（ClawHub，当前 stub）。系统始终包含本地 LocalAdapter，无外部 Registry 时纯本地运行。
+支持的 adapter 类型：`deskhub`（DeskHub/DeskHub 协议）、`clawhub`（ClawHub，当前 stub）。系统始终包含本地 LocalAdapter，无外部 Registry 时纯本地运行。
 
 文件存储配置：
 
