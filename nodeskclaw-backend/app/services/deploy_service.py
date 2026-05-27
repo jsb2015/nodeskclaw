@@ -2054,6 +2054,15 @@ async def execute_rebuild_pipeline(ctx: _DeployContext, *, finalize_success: boo
 
             # ConfigMap
             _publish(3, steps[2])
+            secret_env_refs = (ctx.advanced_config or {}).get("secret_env_refs") if ctx.advanced_config else None
+            await _ensure_agent_bundle_secret_refs(
+                k8s,
+                ctx.namespace,
+                secret_env_refs,
+                labels,
+                source_namespace=settings.PLATFORM_NAMESPACE,
+                copy_missing=True,
+            )
             if ctx.env_vars:
                 cm = build_configmap(f"{ctx.name}-config", ctx.namespace, ctx.env_vars, labels)
                 await k8s.create_or_skip(k8s.core.create_namespaced_config_map, ctx.namespace, cm)

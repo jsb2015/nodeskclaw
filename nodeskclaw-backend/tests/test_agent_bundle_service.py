@@ -319,6 +319,25 @@ def test_parse_agent_bundle_zip_rejects_secret_ref_source_env() -> None:
     assert "不允许声明 sourceEnv" in exc.value.message
 
 
+def test_parse_agent_bundle_zip_rejects_empty_secret_ref_source_env() -> None:
+    data = make_agent_bundle_zip_with_config({
+        "name": "Q",
+        "slug": "q",
+        "model": "mock/q",
+        "secretRefs": [{
+            "env": "OAUTH_ACCESS_TOKEN",
+            "secretName": "mock-oauth-token",
+            "key": "access_token",
+            "sourceEnv": "",
+        }],
+    })
+
+    with pytest.raises(BadRequestError) as exc:
+        parse_agent_bundle_zip("bundle.zip", data)
+
+    assert "不允许声明 sourceEnv" in exc.value.message
+
+
 def test_parse_agent_bundle_zip_rejects_secret_ref_unknown_source() -> None:
     data = make_agent_bundle_zip_with_config({
         "name": "Q",

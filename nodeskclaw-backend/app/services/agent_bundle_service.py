@@ -248,8 +248,7 @@ def _validate_secret_refs(config: dict[str, Any]) -> list[dict[str, Any]]:
                 raise BadRequestError(
                     f"config.secretRefs[{index}].tokenRef 必须与 secretName/key 保持一致",
                 )
-        source_env = ref.get("sourceEnv") or ref.get("source_env")
-        if source_env:
+        if "sourceEnv" in ref or "source_env" in ref:
             raise BadRequestError(
                 f"config.secretRefs[{index}] 不允许声明 sourceEnv，请使用预先创建的 K8s Secret/tokenRef",
             )
