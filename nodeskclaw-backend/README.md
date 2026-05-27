@@ -443,6 +443,7 @@ NetworkPolicy 相关配置项（通过「组织设置 > 网络」页面管理，
 | `SKILL_REGISTRIES` | JSON 数组，配置外部技能基因 Registry 列表。为空则仅使用本地数据库。示例：`[{"type":"deskhub","id":"deskhub","url":"https://skills.deskclaw.me","api_key":"","name":"DeskHub"}]` |
 | `DESKHUB_REGISTRY_URL` | DeskHub Registry 地址。非空时自动注册为 type=deskhub 的 adapter |
 | `DESKHUB_API_KEY` | DeskHub Registry API Key |
+| `DESKHUB_WEB_URL` | DeskHub Web UI 地址，用于缺失技能基因弹窗中的外链 |
 
 支持的 adapter 类型：`deskhub`（DeskHub/DeskHub 协议）、`clawhub`（ClawHub，当前 stub）。系统始终包含本地 LocalAdapter，无外部 Registry 时纯本地运行。
 
