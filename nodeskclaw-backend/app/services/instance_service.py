@@ -117,6 +117,14 @@ def _get_compute_provider(compute_provider: str):
     return spec.provider if spec and spec.provider else None
 
 
+def _reject_user_supplied_secret_env_refs(advanced_config: dict | None) -> None:
+    if isinstance(advanced_config, dict) and "secret_env_refs" in advanced_config:
+        raise BadRequestError(
+            message="advanced_config.secret_env_refs 是系统保留字段，不能由实例配置请求直接声明",
+            message_key="errors.template.secret_env_refs_reserved",
+        )
+
+
 def _is_k8s_not_found(exc: Exception) -> bool:
     return getattr(exc, "status", None) == 404
 
@@ -840,6 +848,8 @@ async def save_config(
     """
     Step 1: 仅保存配置变更到 pending_config，不执行 K8s 操作。
     """
+    if req.advanced_config is not None:
+        _reject_user_supplied_secret_env_refs(req.advanced_config)
     instance = await get_instance(instance_id, db, org_id)
 
     pending = {
@@ -891,6 +901,8 @@ async def update_config(
     instance_id: str, req: UpdateConfigRequest, user_id: str, db: AsyncSession, org_id: str | None = None
 ) -> InstanceInfo:
     """兼容旧接口: 直接保存 + 应用（供回滚等场景使用）。"""
+    if req.advanced_config is not None:
+        _reject_user_supplied_secret_env_refs(req.advanced_config)
     instance = await get_instance(instance_id, db, org_id)
     return await _execute_config_update(instance, req, user_id, db)
 

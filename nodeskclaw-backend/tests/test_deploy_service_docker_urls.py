@@ -7,7 +7,9 @@ from app.core.exceptions import BadRequestError
 from app.models.deploy_record import DeployStatus
 from app.models.instance import InstanceStatus
 from app.schemas.deploy import DeployRequest
+from app.schemas.instance import UpdateConfigRequest
 from app.services import deploy_service
+from app.services import instance_service
 from app.services.deploy_service import (
     DEPLOY_STEPS_BASE,
     DOCKER_DEPLOY_STEPS,
@@ -103,6 +105,66 @@ def test_require_supported_runtime_rejects_removed_nanobot_runtime() -> None:
     assert exc_info.value.status_code == 400
     assert exc_info.value.message_key == "errors.validation.invalid_runtime"
     assert "nanobot" in exc_info.value.message
+
+
+@pytest.mark.asyncio
+async def test_deploy_instance_rejects_user_supplied_secret_env_refs_before_db_access() -> None:
+    class FailingDb:
+        async def execute(self, *_args, **_kwargs):
+            raise AssertionError("db should not be used before rejecting reserved advanced_config")
+
+    req = DeployRequest(
+        cluster_id="cluster-1",
+        name="demo",
+        image_version="latest",
+        advanced_config={
+            "secret_env_refs": [{
+                "env": "OAUTH_ACCESS_TOKEN",
+                "secret_name": "platform-oauth-token",
+                "key": "access_token",
+                "required": True,
+            }],
+        },
+    )
+
+    with pytest.raises(BadRequestError) as exc_info:
+        await deploy_service.deploy_instance(
+            req,
+            SimpleNamespace(id="user-1"),
+            FailingDb(),
+            org_id="org-1",
+        )
+
+    assert exc_info.value.message_key == "errors.template.secret_env_refs_reserved"
+    assert "系统保留字段" in exc_info.value.message
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("entrypoint", ["save", "update"])
+async def test_instance_config_rejects_user_supplied_secret_env_refs_before_db_access(entrypoint: str) -> None:
+    class FailingDb:
+        async def execute(self, *_args, **_kwargs):
+            raise AssertionError("db should not be used before rejecting reserved advanced_config")
+
+    req = UpdateConfigRequest(
+        advanced_config={
+            "secret_env_refs": [{
+                "env": "OAUTH_ACCESS_TOKEN",
+                "secret_name": "platform-oauth-token",
+                "key": "access_token",
+                "required": True,
+            }],
+        },
+    )
+
+    with pytest.raises(BadRequestError) as exc_info:
+        if entrypoint == "save":
+            await instance_service.save_config("instance-1", req, FailingDb(), org_id="org-1")
+        else:
+            await instance_service.update_config("instance-1", req, "user-1", FailingDb(), org_id="org-1")
+
+    assert exc_info.value.message_key == "errors.template.secret_env_refs_reserved"
+    assert "系统保留字段" in exc_info.value.message
 
 
 def test_set_progress_step_names_preserves_existing_config_snapshot() -> None:

@@ -310,6 +310,14 @@ def _reject_unsupported_secret_refs_for_provider(
         )
 
 
+def _reject_user_supplied_secret_env_refs(advanced_config: dict | None) -> None:
+    if isinstance(advanced_config, dict) and "secret_env_refs" in advanced_config:
+        raise BadRequestError(
+            message="advanced_config.secret_env_refs 是系统保留字段，不能由部署请求直接声明",
+            message_key="errors.template.secret_env_refs_reserved",
+        )
+
+
 async def _restore_agent_bundle_with_retry(
     instance: Instance,
     manifest: dict,
@@ -954,13 +962,21 @@ class _DeployContext:
 
 
 async def deploy_instance(
-    req: DeployRequest, user: User, db: AsyncSession, org_id: str | None = None
+    req: DeployRequest,
+    user: User,
+    db: AsyncSession,
+    org_id: str | None = None,
+    *,
+    allow_reserved_secret_env_refs: bool = False,
 ) -> str:
     """
     同步阶段：创建 Instance + DeployRecord，立即返回 record.id。
     不执行任何 K8s 操作，由调用方用 asyncio.create_task 启动后台管道。
     """
     _require_supported_runtime(req.runtime)
+    advanced_config = _json.loads(_json.dumps(req.advanced_config)) if req.advanced_config else {}
+    if not allow_reserved_secret_env_refs:
+        _reject_user_supplied_secret_env_refs(advanced_config)
 
     adapter = get_deploy_adapter()
     effective_cluster_id, org = await adapter.resolve_cluster(
@@ -1105,7 +1121,6 @@ async def deploy_instance(
     if docker_host_port is not None:
         env_vars["DOCKER_HOST_PORT"] = str(docker_host_port)
 
-    advanced_config = _json.loads(_json.dumps(req.advanced_config)) if req.advanced_config else {}
     if secret_env_refs:
         existing_refs = advanced_config.setdefault("secret_env_refs", [])
         existing_refs.extend(secret_env_refs)
