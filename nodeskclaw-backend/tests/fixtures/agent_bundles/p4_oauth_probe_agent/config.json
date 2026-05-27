@@ -7,8 +7,7 @@
       "env": "OAUTH_ACCESS_TOKEN",
       "secretName": "mock-oauth-token",
       "key": "access_token",
-      "tokenRef": "mock-oauth-token/access_token",
-      "sourceEnv": "NODESKCLAW_TEST_OAUTH_ACCESS_TOKEN"
+      "tokenRef": "mock-oauth-token/access_token"
     }
   ],
   "env": {

@@ -184,14 +184,16 @@ def _validate_secret_refs(config: dict[str, Any]) -> list[dict[str, Any]]:
             )
         source = ref.get("source") if isinstance(ref.get("source"), dict) else {}
         source_env = ref.get("sourceEnv") or ref.get("source_env") or source.get("env")
+        if source_env:
+            raise BadRequestError(
+                f"config.secretRefs[{index}] 不允许声明 sourceEnv，请使用预先创建的 K8s Secret/tokenRef",
+            )
         item = dict(ref)
         item["env"] = str(env_name)
         item["secretName"] = str(secret_name)
         item["key"] = str(secret_key)
         if token_ref:
             item["tokenRef"] = str(token_ref)
-        if source_env:
-            item["sourceEnv"] = str(source_env)
         item["required"] = ref.get("required", True) is not False
         normalized.append(item)
     return normalized

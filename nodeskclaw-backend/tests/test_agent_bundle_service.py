@@ -75,6 +75,19 @@ def make_base_agent_bundle_zip(
     return buf.getvalue()
 
 
+def make_agent_bundle_zip_with_config(config: dict) -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("config.json", json.dumps(config))
+        zf.writestr("AGENT.md", "# Q\nhello")
+        zf.writestr("SOUL.md", "soul")
+        zf.writestr(
+            "skills/echo/SKILL.md",
+            "---\nname: echo\nversion: 1.0.0\ndescription: Echo skill\npermissions:\n  tools: []\n---\n# Echo\n",
+        )
+    return buf.getvalue()
+
+
 def make_agent_bundle_zip_with_skill_name(skill_name: str) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
@@ -278,6 +291,25 @@ def test_parse_agent_bundle_zip_rejects_high_compression_ratio() -> None:
     assert "压缩率异常" in exc.value.message
 
 
+def test_parse_agent_bundle_zip_rejects_secret_ref_source_env() -> None:
+    data = make_agent_bundle_zip_with_config({
+        "name": "Q",
+        "slug": "q",
+        "model": "mock/q",
+        "secretRefs": [{
+            "env": "OAUTH_ACCESS_TOKEN",
+            "secretName": "mock-oauth-token",
+            "key": "access_token",
+            "sourceEnv": "JWT_SECRET",
+        }],
+    })
+
+    with pytest.raises(BadRequestError) as exc:
+        parse_agent_bundle_zip("bundle.zip", data)
+
+    assert "不允许声明 sourceEnv" in exc.value.message
+
+
 def test_parse_agent_bundle_zip_rejects_duplicate_paths() -> None:
     with pytest.warns(UserWarning, match="Duplicate name"):
         data = make_base_agent_bundle_zip([("docs/dup.txt", "one"), ("docs/dup.txt", "two")])
@@ -473,7 +505,7 @@ def test_secret_env_refs_are_injected_as_k8s_secret_refs_not_configmap_data() ->
     env_by_name = {item.name: item for item in deployment.spec.template.spec.containers[0].env}
     assert configmap.data == {"VISIBLE": "1"}
     assert "OAUTH_ACCESS_TOKEN" not in configmap.data
-    assert refs[0]["source_env"] == "NODESKCLAW_TEST_OAUTH_ACCESS_TOKEN"
+    assert "source_env" not in refs[0]
     assert env_by_name["OAUTH_ACCESS_TOKEN"].value_from.secret_key_ref.name == "mock-oauth-token"
     assert env_by_name["OAUTH_ACCESS_TOKEN"].value_from.secret_key_ref.key == "access_token"
 
