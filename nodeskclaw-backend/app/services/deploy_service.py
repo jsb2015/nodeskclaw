@@ -149,6 +149,21 @@ def _collect_secret_env_refs(agent_bundle_manifest: dict | None) -> list[dict]:
     return collected
 
 
+def _collect_reserved_secret_env_refs(advanced_config: dict | None) -> list[dict]:
+    if not isinstance(advanced_config, dict) or "secret_env_refs" not in advanced_config:
+        return []
+
+    refs = advanced_config.get("secret_env_refs")
+    if refs is None:
+        return []
+    if not isinstance(refs, list) or any(not isinstance(ref, dict) for ref in refs):
+        raise BadRequestError(
+            message="advanced_config.secret_env_refs 格式无效，无法作为系统保留字段继续部署",
+            message_key="errors.template.secret_env_refs_invalid",
+        )
+    return refs
+
+
 def _secret_env_ref_source_namespace(secret_env_refs: list[dict] | None) -> str | None:
     source_namespaces = {
         str(ref.get("source_namespace")).strip()
@@ -1106,19 +1121,27 @@ async def deploy_instance(
         template_agent_bundle_manifest = await get_template_agent_bundle_manifest(db, req.template_id, org_id)
         env_vars.update(await get_template_deploy_env_vars(db, req.template_id, org_id))
 
-    secret_env_refs = _collect_secret_env_refs(template_agent_bundle_manifest)
-    if secret_env_refs:
-        _reject_secret_ref_env_var_collisions(env_vars, secret_env_refs)
-        _reject_unsupported_secret_refs_for_provider(cluster.compute_provider, secret_env_refs)
+    template_secret_env_refs = _collect_secret_env_refs(template_agent_bundle_manifest)
+    reserved_secret_env_refs = (
+        _collect_reserved_secret_env_refs(advanced_config)
+        if allow_reserved_secret_env_refs
+        else []
+    )
+    secret_env_refs_to_validate = [*reserved_secret_env_refs, *template_secret_env_refs]
+    if secret_env_refs_to_validate:
+        _reject_secret_ref_env_var_collisions(env_vars, secret_env_refs_to_validate)
+        _reject_unsupported_secret_refs_for_provider(cluster.compute_provider, secret_env_refs_to_validate)
         if cluster.compute_provider == "k8s":
             from app.services.runtime.registries.compute_registry import require_k8s_client
             k8s = await require_k8s_client(cluster)
-            await _ensure_agent_bundle_secret_refs(
-                k8s,
-                namespace,
-                secret_env_refs,
-                {},
-            )
+            for refs in (reserved_secret_env_refs, template_secret_env_refs):
+                if refs:
+                    await _ensure_agent_bundle_secret_refs(
+                        k8s,
+                        namespace,
+                        refs,
+                        {},
+                    )
 
     gateway_token = env_vars.get("GATEWAY_TOKEN") or env_vars.get("OPENCLAW_GATEWAY_TOKEN")
     if not gateway_token:
@@ -1141,9 +1164,9 @@ async def deploy_instance(
     if docker_host_port is not None:
         env_vars["DOCKER_HOST_PORT"] = str(docker_host_port)
 
-    if secret_env_refs:
+    if template_secret_env_refs:
         existing_refs = advanced_config.setdefault("secret_env_refs", [])
-        existing_refs.extend(secret_env_refs)
+        existing_refs.extend(template_secret_env_refs)
 
     # 创建实例记录
     instance = Instance(

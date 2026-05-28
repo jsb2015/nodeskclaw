@@ -138,6 +138,80 @@ async def test_deploy_instance_rejects_user_supplied_secret_env_refs_before_db_a
     assert "系统保留字段" in exc_info.value.message
 
 
+@pytest.mark.asyncio
+async def test_deploy_instance_rejects_reserved_secret_env_refs_on_docker_clone_before_create(monkeypatch) -> None:
+    class FakeAdapter:
+        async def resolve_cluster(self, *_args, **_kwargs):
+            return "cluster-1", SimpleNamespace(id="org-1")
+
+        def build_namespace(self, slug, _org):
+            return f"ns-{slug}"
+
+    class ClusterResult:
+        def scalar_one_or_none(self):
+            return SimpleNamespace(
+                id="cluster-1",
+                compute_provider="docker",
+                proxy_endpoint=None,
+                api_server_url=None,
+            )
+
+    class EmptyScalarRows:
+        def all(self):
+            return []
+
+    class EmptyScalarsResult:
+        def scalars(self):
+            return EmptyScalarRows()
+
+    class EmptyRowsResult:
+        def all(self):
+            return []
+
+    class FakeDb:
+        def __init__(self):
+            self.results = [ClusterResult(), EmptyScalarsResult(), EmptyRowsResult()]
+            self.added = []
+
+        async def execute(self, *_args, **_kwargs):
+            return self.results.pop(0)
+
+        def add(self, value):
+            self.added.append(value)
+            raise AssertionError("instance/deploy records should not be created")
+
+    monkeypatch.setattr(deploy_service, "get_deploy_adapter", lambda: FakeAdapter())
+
+    req = DeployRequest(
+        cluster_id="cluster-1",
+        name="clone-demo",
+        image_version="latest",
+        advanced_config={
+            "secret_env_refs": [{
+                "env": "OAUTH_ACCESS_TOKEN",
+                "secret_name": "platform-oauth-token",
+                "key": "access_token",
+                "required": True,
+                "source_namespace": "nodeskclaw-system",
+            }],
+        },
+    )
+    db = FakeDb()
+
+    with pytest.raises(BadRequestError) as exc_info:
+        await deploy_service.deploy_instance(
+            req,
+            SimpleNamespace(id="user-1"),
+            db,
+            org_id="org-1",
+            allow_reserved_secret_env_refs=True,
+        )
+
+    assert exc_info.value.message_key == "errors.template.secret_refs_require_k8s"
+    assert "仅支持 K8s" in exc_info.value.message
+    assert db.added == []
+
+
 def test_instance_config_preserves_internal_secret_env_refs() -> None:
     secret_refs = [{
         "env": "OAUTH_ACCESS_TOKEN",
