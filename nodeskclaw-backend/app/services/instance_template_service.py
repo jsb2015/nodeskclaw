@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
 from app.models.base import not_deleted
 from app.models.gene import ContentVisibility, Gene, GeneSource, Genome, InstanceGene
@@ -25,6 +26,7 @@ from app.schemas.instance_template import (
     TemplateItemRef,
 )
 from app.services.agent_bundle_service import (
+    SECRET_REF_SOURCE_NAMESPACE_KEY,
     build_bundle_env_vars,
     normalize_bundle_slug,
     parse_agent_bundle_dir,
@@ -234,11 +236,31 @@ def _is_agent_bundle_template(tpl: InstanceTemplate) -> bool:
     return tpl.template_type in (InstanceTemplateType.agent_bundle, InstanceTemplateType.agent_bundle.value)
 
 
-def _template_agent_bundle_manifest(tpl: InstanceTemplate) -> dict[str, Any] | None:
+def _is_trusted_platform_agent_bundle_template(tpl: InstanceTemplate) -> bool:
+    return (
+        _is_agent_bundle_template(tpl)
+        and getattr(tpl, "org_id", None) is None
+        and getattr(tpl, "visibility", None) in (ContentVisibility.public, ContentVisibility.public.value)
+    )
+
+
+def _template_agent_bundle_manifest(
+    tpl: InstanceTemplate,
+    *,
+    include_platform_secret_source: bool = False,
+) -> dict[str, Any] | None:
     manifest = _parse_json_obj(tpl.agent_bundle_manifest)
     if not _is_agent_bundle_template(tpl):
         return manifest
-    return sanitize_agent_bundle_manifest(manifest)
+    sanitized = sanitize_agent_bundle_manifest(manifest)
+    if (
+        sanitized
+        and include_platform_secret_source
+        and _is_trusted_platform_agent_bundle_template(tpl)
+        and sanitized.get("secret_refs")
+    ):
+        sanitized[SECRET_REF_SOURCE_NAMESPACE_KEY] = settings.PLATFORM_NAMESPACE
+    return sanitized
 
 
 def _template_to_info(
@@ -375,7 +397,7 @@ async def get_template_agent_bundle_manifest(
     tpl = await _get_template_model(db, template_id, org_id)
     if tpl.template_type != InstanceTemplateType.agent_bundle:
         return None
-    return sanitize_agent_bundle_manifest(_parse_json_obj(tpl.agent_bundle_manifest))
+    return _template_agent_bundle_manifest(tpl, include_platform_secret_source=True)
 
 
 async def get_template_deploy_env_vars(

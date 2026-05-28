@@ -42,6 +42,7 @@ BUNDLE_REL_PATH_PATTERN = re.compile(r"^[A-Za-z0-9._/-]+$")
 SECRET_REF_ENV_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 SECRET_REF_SECRET_KEY_PATTERN = re.compile(r"^[A-Za-z0-9._-]+$")
 DNS_LABEL_PATTERN = re.compile(r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")
+SECRET_REF_SOURCE_NAMESPACE_KEY = "_nodeskclaw_secret_ref_source_namespace"
 
 
 def normalize_bundle_slug(value: str) -> str:
@@ -281,6 +282,7 @@ def sanitize_agent_bundle_manifest(manifest: dict[str, Any] | None) -> dict[str,
     sanitized = dict(manifest)
     sanitized["secret_refs"] = _validate_secret_refs(manifest)
     sanitized.pop("secretRefs", None)
+    sanitized.pop(SECRET_REF_SOURCE_NAMESPACE_KEY, None)
     return sanitized
 
 

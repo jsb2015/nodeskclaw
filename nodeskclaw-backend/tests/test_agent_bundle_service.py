@@ -26,6 +26,7 @@ from app.services.agent_bundle_service import (
     MAX_TOTAL_BYTES,
     MAX_ZIP_BYTES,
     MAX_ZIP_ENTRIES,
+    SECRET_REF_SOURCE_NAMESPACE_KEY,
     ZIP_RATIO_MIN_FILE_BYTES,
     build_bundle_env_vars,
     parse_agent_bundle_dir,
@@ -846,6 +847,79 @@ async def test_template_deploy_accessors_reject_legacy_secret_ref_unknown_source
     assert "不支持的字段: source" in env_exc.value.message
 
 
+@pytest.mark.asyncio
+async def test_org_private_agent_bundle_manifest_has_no_platform_secret_source(monkeypatch) -> None:
+    manifest = {
+        "slug": "oauth-agent",
+        "name": "OAuth Agent",
+        "env": {},
+        "secret_refs": [{
+            "env": "OAUTH_ACCESS_TOKEN",
+            "secretName": "mock-oauth-token",
+            "key": "access_token",
+        }],
+    }
+
+    async def fake_get_template_model(*_args, **_kwargs):
+        return SimpleNamespace(
+            template_type=InstanceTemplateType.agent_bundle,
+            agent_bundle_manifest=json.dumps(manifest, ensure_ascii=False),
+            org_id="org-1",
+            visibility=ContentVisibility.org_private.value,
+        )
+
+    monkeypatch.setattr(instance_template_service, "_get_template_model", fake_get_template_model)
+
+    deployed_manifest = await get_template_agent_bundle_manifest(SimpleNamespace(), "tpl-1", "org-1")
+    refs = _collect_secret_env_refs(deployed_manifest)
+
+    assert SECRET_REF_SOURCE_NAMESPACE_KEY not in deployed_manifest
+    assert refs == [{
+        "env": "OAUTH_ACCESS_TOKEN",
+        "secret_name": "mock-oauth-token",
+        "key": "access_token",
+        "required": True,
+    }]
+
+
+@pytest.mark.asyncio
+async def test_global_public_agent_bundle_manifest_marks_platform_secret_source(monkeypatch) -> None:
+    manifest = {
+        "slug": "oauth-agent",
+        "name": "OAuth Agent",
+        "env": {},
+        "secret_refs": [{
+            "env": "OAUTH_ACCESS_TOKEN",
+            "secretName": "mock-oauth-token",
+            "key": "access_token",
+        }],
+    }
+
+    async def fake_get_template_model(*_args, **_kwargs):
+        return SimpleNamespace(
+            template_type=InstanceTemplateType.agent_bundle,
+            agent_bundle_manifest=json.dumps(manifest, ensure_ascii=False),
+            org_id=None,
+            visibility=ContentVisibility.public.value,
+        )
+
+    monkeypatch.setattr(instance_template_service, "_get_template_model", fake_get_template_model)
+    monkeypatch.setattr(instance_template_service.settings, "PLATFORM_NAMESPACE", "nodeskclaw-system")
+
+    deployed_manifest = await get_template_agent_bundle_manifest(SimpleNamespace(), "tpl-1", "org-1")
+    refs = _collect_secret_env_refs(deployed_manifest)
+
+    assert deployed_manifest[SECRET_REF_SOURCE_NAMESPACE_KEY] == "nodeskclaw-system"
+    assert "source_namespace" not in deployed_manifest["secret_refs"][0]
+    assert refs == [{
+        "env": "OAUTH_ACCESS_TOKEN",
+        "secret_name": "mock-oauth-token",
+        "key": "access_token",
+        "required": True,
+        "source_namespace": "nodeskclaw-system",
+    }]
+
+
 def _template_info_model(
     manifest: dict,
     *,
@@ -906,6 +980,24 @@ def test_template_info_uses_sanitized_manifest_secret_refs_not_raw_column() -> N
     serialized = json.dumps(info.model_dump(mode="json"), ensure_ascii=False)
     assert "plain-token" not in serialized
     assert '"source":' not in serialized
+
+
+def test_sanitize_agent_bundle_manifest_strips_internal_secret_source_key() -> None:
+    manifest = {
+        "slug": "oauth-agent",
+        "name": "OAuth Agent",
+        "env": {},
+        SECRET_REF_SOURCE_NAMESPACE_KEY: "nodeskclaw-system",
+        "secret_refs": [{
+            "env": "OAUTH_ACCESS_TOKEN",
+            "secretName": "mock-oauth-token",
+            "key": "access_token",
+        }],
+    }
+
+    sanitized = sanitize_agent_bundle_manifest(manifest)
+
+    assert SECRET_REF_SOURCE_NAMESPACE_KEY not in sanitized
 
 
 def test_template_info_rejects_legacy_manifest_secret_ref_unknown_source() -> None:

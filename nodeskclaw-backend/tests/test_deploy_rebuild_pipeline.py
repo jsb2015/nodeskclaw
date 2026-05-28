@@ -263,6 +263,7 @@ async def test_execute_rebuild_pipeline_copies_agent_bundle_secret_refs(monkeypa
             "secret_name": "mock-oauth-token",
             "key": "access_token",
             "required": True,
+            "source_namespace": "nodeskclaw-system",
         }],
     }
 

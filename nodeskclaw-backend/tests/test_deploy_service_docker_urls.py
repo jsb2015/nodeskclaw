@@ -7,7 +7,6 @@ from app.core.exceptions import BadRequestError
 from app.models.deploy_record import DeployStatus
 from app.models.instance import InstanceStatus
 from app.schemas.deploy import DeployRequest
-from app.schemas.instance import UpdateConfigRequest
 from app.services import deploy_service
 from app.services import instance_service
 from app.services.deploy_service import (
@@ -139,29 +138,60 @@ async def test_deploy_instance_rejects_user_supplied_secret_env_refs_before_db_a
     assert "系统保留字段" in exc_info.value.message
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize("entrypoint", ["save", "update"])
-async def test_instance_config_rejects_user_supplied_secret_env_refs_before_db_access(entrypoint: str) -> None:
-    class FailingDb:
-        async def execute(self, *_args, **_kwargs):
-            raise AssertionError("db should not be used before rejecting reserved advanced_config")
-
-    req = UpdateConfigRequest(
-        advanced_config={
-            "secret_env_refs": [{
-                "env": "OAUTH_ACCESS_TOKEN",
-                "secret_name": "platform-oauth-token",
-                "key": "access_token",
-                "required": True,
-            }],
-        },
+def test_instance_config_preserves_internal_secret_env_refs() -> None:
+    secret_refs = [{
+        "env": "OAUTH_ACCESS_TOKEN",
+        "secret_name": "platform-oauth-token",
+        "key": "access_token",
+        "required": True,
+        "source_namespace": "nodeskclaw-system",
+    }]
+    merged = instance_service._merge_reserved_advanced_config(
+        {"network": {"peers": ["peer-1"]}},
+        json.dumps({"secret_env_refs": secret_refs, "network": {"peers": ["old-peer"]}}),
     )
 
+    assert merged == {
+        "network": {"peers": ["peer-1"]},
+        "secret_env_refs": secret_refs,
+    }
+
+
+def test_instance_config_allows_round_trip_internal_secret_env_refs() -> None:
+    secret_refs = [{
+        "env": "OAUTH_ACCESS_TOKEN",
+        "secret_name": "platform-oauth-token",
+        "key": "access_token",
+        "required": True,
+    }]
+    merged = instance_service._merge_reserved_advanced_config(
+        {"debug": True, "secret_env_refs": secret_refs},
+        json.dumps({"secret_env_refs": secret_refs}),
+    )
+
+    assert merged == {"debug": True, "secret_env_refs": secret_refs}
+
+
+def test_instance_config_rejects_modified_internal_secret_env_refs() -> None:
     with pytest.raises(BadRequestError) as exc_info:
-        if entrypoint == "save":
-            await instance_service.save_config("instance-1", req, FailingDb(), org_id="org-1")
-        else:
-            await instance_service.update_config("instance-1", req, "user-1", FailingDb(), org_id="org-1")
+        instance_service._merge_reserved_advanced_config(
+            {
+                "secret_env_refs": [{
+                    "env": "OAUTH_ACCESS_TOKEN",
+                    "secret_name": "attacker-guessed-secret",
+                    "key": "access_token",
+                    "required": True,
+                }],
+            },
+            json.dumps({
+                "secret_env_refs": [{
+                    "env": "OAUTH_ACCESS_TOKEN",
+                    "secret_name": "platform-oauth-token",
+                    "key": "access_token",
+                    "required": True,
+                }],
+            }),
+        )
 
     assert exc_info.value.message_key == "errors.template.secret_env_refs_reserved"
     assert "系统保留字段" in exc_info.value.message
@@ -419,6 +449,39 @@ async def test_agent_bundle_secret_refs_fail_fast_when_missing() -> None:
 
 
 @pytest.mark.asyncio
+async def test_agent_bundle_secret_refs_do_not_read_platform_without_trusted_source() -> None:
+    reads = []
+
+    class MissingSecret(Exception):
+        status = 404
+
+    class FakeCore:
+        async def read_namespaced_secret(self, secret_name, namespace):
+            reads.append((namespace, secret_name))
+            if namespace == "nodeskclaw-system":
+                return SimpleNamespace(data={"access_token": "encoded"})
+            raise MissingSecret()
+
+    class FakeK8s:
+        core = FakeCore()
+
+    with pytest.raises(BadRequestError):
+        await _ensure_agent_bundle_secret_refs(
+            FakeK8s(),
+            "agent-ns",
+            [{
+                "env": "OAUTH_ACCESS_TOKEN",
+                "secret_name": "mock-oauth-token",
+                "key": "access_token",
+                "required": True,
+            }],
+            {},
+        )
+
+    assert reads == [("agent-ns", "mock-oauth-token")]
+
+
+@pytest.mark.asyncio
 async def test_agent_bundle_secret_refs_accept_existing_secret_key() -> None:
     class FakeCore:
         async def read_namespaced_secret(self, *_args, **_kwargs):
@@ -474,9 +537,9 @@ async def test_agent_bundle_secret_refs_accept_platform_secret_before_namespace_
             "secret_name": "mock-oauth-token",
             "key": "access_token",
             "required": True,
+            "source_namespace": "nodeskclaw-system",
         }],
         {},
-        source_namespace="nodeskclaw-system",
     )
 
     assert reads == [
@@ -525,9 +588,9 @@ async def test_agent_bundle_secret_refs_copy_platform_secret_after_namespace_cre
             "secret_name": "mock-oauth-token",
             "key": "access_token",
             "required": True,
+            "source_namespace": "nodeskclaw-system",
         }],
         {"app.kubernetes.io/managed-by": "nodeskclaw"},
-        source_namespace="nodeskclaw-system",
         copy_missing=True,
     )
 

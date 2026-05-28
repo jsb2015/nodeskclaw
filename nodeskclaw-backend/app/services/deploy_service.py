@@ -26,6 +26,7 @@ from app.models.deploy_record import DeployAction, DeployRecord, DeployStatus
 from app.models.instance import Instance, InstanceStatus
 from app.models.user import User
 from app.schemas.deploy import DeployProgress, DeployRequest, PrecheckItem, PrecheckResult
+from app.services.agent_bundle_service import SECRET_REF_SOURCE_NAMESPACE_KEY
 from app.services.k8s.event_bus import event_bus
 from app.services.deploy.factory import get_deploy_adapter
 from app.services.k8s.resource_builder import (
@@ -114,6 +115,11 @@ def _require_supported_runtime(runtime: str) -> None:
 def _collect_secret_env_refs(agent_bundle_manifest: dict | None) -> list[dict]:
     if not agent_bundle_manifest:
         return []
+    source_namespace = agent_bundle_manifest.get(SECRET_REF_SOURCE_NAMESPACE_KEY)
+    if not isinstance(source_namespace, str) or not source_namespace.strip():
+        source_namespace = None
+    else:
+        source_namespace = source_namespace.strip()
     refs = agent_bundle_manifest.get("secret_refs")
     if not isinstance(refs, list):
         return []
@@ -131,13 +137,27 @@ def _collect_secret_env_refs(agent_bundle_manifest: dict | None) -> list[dict]:
                 secret_name = secret_name or parts[0].strip()
                 secret_key = secret_key or parts[1].strip()
         if env_name and secret_name and secret_key:
-            collected.append({
+            item = {
                 "env": str(env_name),
                 "secret_name": str(secret_name),
                 "key": str(secret_key),
                 "required": ref.get("required", True) is not False,
-            })
+            }
+            if source_namespace:
+                item["source_namespace"] = source_namespace
+            collected.append(item)
     return collected
+
+
+def _secret_env_ref_source_namespace(secret_env_refs: list[dict] | None) -> str | None:
+    source_namespaces = {
+        str(ref.get("source_namespace")).strip()
+        for ref in secret_env_refs or []
+        if isinstance(ref, dict) and str(ref.get("source_namespace") or "").strip()
+    }
+    if len(source_namespaces) == 1:
+        return next(iter(source_namespaces))
+    return None
 
 
 async def _read_k8s_secret(k8s, namespace: str, secret_name: str):
@@ -177,6 +197,7 @@ async def _ensure_agent_bundle_secret_refs(
     if not secret_env_refs:
         return
 
+    source_namespace = source_namespace or _secret_env_ref_source_namespace(secret_env_refs)
     unresolved: list[dict] = []
     for ref in secret_env_refs:
         secret_name = ref.get("secret_name")
@@ -1097,7 +1118,6 @@ async def deploy_instance(
                 namespace,
                 secret_env_refs,
                 {},
-                source_namespace=settings.PLATFORM_NAMESPACE,
             )
 
     gateway_token = env_vars.get("GATEWAY_TOKEN") or env_vars.get("OPENCLAW_GATEWAY_TOKEN")
@@ -1604,7 +1624,6 @@ async def _execute_deploy_inner(ctx, async_session_factory, get_config, total, s
                 ctx.namespace,
                 secret_env_refs,
                 labels,
-                source_namespace=settings.PLATFORM_NAMESPACE,
                 copy_missing=True,
             )
             if ctx.env_vars:
@@ -2075,7 +2094,6 @@ async def execute_rebuild_pipeline(ctx: _DeployContext, *, finalize_success: boo
                 ctx.namespace,
                 secret_env_refs,
                 labels,
-                source_namespace=settings.PLATFORM_NAMESPACE,
                 copy_missing=True,
             )
             if ctx.env_vars:
