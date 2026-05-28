@@ -34,13 +34,13 @@ async def clear_workspace_session(
     session_key = f"workspace:{workspace_id}"
     session_filename = f"session_{session_key}.json"
     session_rel = f"{_SESSIONS_DIR}/{session_filename}"
-    cleaned = False
+    json_cleaned = False
 
     raw = await fs.read_text(session_rel)
     if raw is not None:
         await fs.write_text(session_rel, "{}")
         logger.info("Cleared Hermes session file: %s", session_filename)
-        cleaned = True
+        json_cleaned = True
 
     request_dumps = await _list_session_files(fs, workspace_id)
     for dump_file in request_dumps:
@@ -51,10 +51,13 @@ async def clear_workspace_session(
             logger.debug("Failed to clear request dump %s", dump_file, exc_info=True)
 
     db_cleaned = await _clear_state_db(fs, session_key)
-    if db_cleaned:
-        cleaned = True
 
-    return cleaned
+    if json_cleaned and not db_cleaned:
+        logger.warning(
+            "Hermes session JSON cleared but state.db cleanup failed for %s",
+            session_key,
+        )
+    return json_cleaned and db_cleaned
 
 
 async def clear_all_sessions(fs: RemoteFS) -> bool:

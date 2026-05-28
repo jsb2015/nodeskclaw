@@ -266,6 +266,11 @@ class PodFS:
             "mime_type": mime,
         }
 
+    async def exec_command(self, cmd: list[str]) -> str:
+        """Run a command inside the Pod via kubectl exec."""
+        return await self._k8s.exec_in_pod(
+            self._ns, self._pod, cmd, container=self._container,
+        )
 
     async def scan_skills(self, skills_dir_rel: str) -> list[dict]:
         """Batch-scan all skill directories under *skills_dir_rel*.
