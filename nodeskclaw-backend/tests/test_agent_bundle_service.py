@@ -1000,7 +1000,7 @@ def test_sanitize_agent_bundle_manifest_strips_internal_secret_source_key() -> N
     assert SECRET_REF_SOURCE_NAMESPACE_KEY not in sanitized
 
 
-def test_template_info_rejects_legacy_manifest_secret_ref_unknown_source() -> None:
+def test_template_info_ignores_invalid_legacy_manifest_secret_refs() -> None:
     manifest = {
         "slug": "legacy-oauth-agent",
         "name": "Legacy OAuth Agent",
@@ -1013,7 +1013,11 @@ def test_template_info_rejects_legacy_manifest_secret_ref_unknown_source() -> No
         }],
     }
 
-    with pytest.raises(BadRequestError) as exc:
-        _template_to_info(_template_info_model(manifest))
+    info = _template_to_info(_template_info_model(manifest))
 
-    assert "不支持的字段: source" in exc.value.message
+    assert info.agent_bundle is not None
+    assert info.agent_bundle["slug"] == "legacy-oauth-agent"
+    assert info.secret_refs == []
+    serialized = json.dumps(info.model_dump(mode="json"), ensure_ascii=False)
+    assert "plain-token" not in serialized
+    assert '"source":' not in serialized

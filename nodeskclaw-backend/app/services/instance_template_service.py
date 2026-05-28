@@ -248,11 +248,26 @@ def _template_agent_bundle_manifest(
     tpl: InstanceTemplate,
     *,
     include_platform_secret_source: bool = False,
+    allow_invalid_secret_refs: bool = False,
 ) -> dict[str, Any] | None:
     manifest = _parse_json_obj(tpl.agent_bundle_manifest)
     if not _is_agent_bundle_template(tpl):
         return manifest
-    sanitized = sanitize_agent_bundle_manifest(manifest)
+    try:
+        sanitized = sanitize_agent_bundle_manifest(manifest)
+    except BadRequestError as exc:
+        if not allow_invalid_secret_refs:
+            raise
+        logger.warning(
+            "忽略历史 Agent Bundle 模板中的非法 secretRefs: template_id=%s slug=%s err=%s",
+            getattr(tpl, "id", None),
+            getattr(tpl, "slug", None),
+            exc.message,
+        )
+        sanitized = dict(manifest or {})
+        sanitized.pop("secretRefs", None)
+        sanitized.pop("secret_refs", None)
+        sanitized.pop(SECRET_REF_SOURCE_NAMESPACE_KEY, None)
     if (
         sanitized
         and include_platform_secret_source
@@ -271,7 +286,7 @@ def _template_to_info(
     items = item_refs or []
     gene_slugs_from_items = [r.slug for r in items if r.type == "gene"]
     legacy_slugs = gene_slugs_from_items if items else _parse_gene_slugs(tpl.gene_slugs)
-    agent_bundle_manifest = _template_agent_bundle_manifest(tpl)
+    agent_bundle_manifest = _template_agent_bundle_manifest(tpl, allow_invalid_secret_refs=True)
 
     return InstanceTemplateInfo(
         id=tpl.id,
