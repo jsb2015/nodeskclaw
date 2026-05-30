@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import json
 import logging
+import re
 import time
 import uuid
 from typing import Any
@@ -63,8 +64,10 @@ _API_TYPE_AUTH: dict[str, str] = {
 _GEMINI_UNSUPPORTED_SCHEMA_KEYS = {"$schema", "additionalProperties", "strict"}
 _LLM_ATTRIBUTION_HEADER = "x-nodeskclaw-llm-attribution"
 _SESSION_KEY_HEADERS = (
-    "x-openclaw-session-key",
     "x-nodeskclaw-session-key",
+    # Legacy runtime session headers kept for rolling upgrades.
+    "x-openclaw-session-key",
+    "x-hermes-session-id",
     "x-nanobot-session-key",
 )
 _INTERNAL_CONTEXT_HEADERS = {
@@ -139,10 +142,14 @@ def _decode_attribution_token(token: str, secret: str) -> dict | None:
 def _workspace_id_from_session_key(session_key: str | None) -> str | None:
     if not session_key:
         return None
-    for prefix in ("workspace:", "nodeskclaw:"):
-        if session_key.startswith(prefix):
-            workspace_id = session_key[len(prefix):].strip()
-            return workspace_id or None
+    session_key = session_key.strip()
+    if re.search(r"[\r\n\x00]", session_key):
+        return None
+    prefix = "workspace:"
+    if session_key.startswith(prefix):
+        workspace_id = session_key[len(prefix):].strip()
+        if workspace_id and not re.search(r"[\r\n\x00]", workspace_id):
+            return workspace_id
     return None
 
 
@@ -178,6 +185,21 @@ async def _instance_in_workspace(db, workspace_id: str, instance_id: str) -> boo
     return result.scalar_one_or_none() is not None
 
 
+async def _active_workspace_ids_for_instance(db, instance_id: str, org_id: str | None) -> list[str]:
+    result = await db.execute(
+        select(WorkspaceAgent.workspace_id)
+        .join(Workspace, Workspace.id == WorkspaceAgent.workspace_id)
+        .where(
+            WorkspaceAgent.instance_id == instance_id,
+            Workspace.org_id == org_id,
+            not_deleted(WorkspaceAgent),
+            not_deleted(Workspace),
+        )
+        .distinct()
+    )
+    return [str(item) for item in result.scalars().all() if item]
+
+
 async def _resolve_usage_attribution(request: Request, db, instance: Instance) -> tuple[str | None, str]:
     token = request.headers.get(_LLM_ATTRIBUTION_HEADER, "").strip()
     if token:
@@ -200,8 +222,15 @@ async def _resolve_usage_attribution(request: Request, db, instance: Instance) -
 
     workspace_id = _extract_session_workspace_id(request)
     if not workspace_id:
-        tracked_wid = instance.last_active_workspace_id
+        tracked_wid = str(getattr(instance, "last_active_workspace_id", "") or "").strip()
         if tracked_wid:
+            active_workspace_ids = await _active_workspace_ids_for_instance(db, instance.id, instance.org_id)
+            if len(active_workspace_ids) > 1:
+                logger.warning(
+                    "Active tracking attribution skipped for multi-workspace instance=%s workspace=%s",
+                    instance.id, tracked_wid,
+                )
+                return None, "unattributed"
             if (
                 await _workspace_belongs_to_org(db, tracked_wid, instance.org_id)
                 and await _instance_in_workspace(db, tracked_wid, instance.id)

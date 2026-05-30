@@ -344,6 +344,12 @@ export class TunnelClient {
     const sessionKey = msg.payload.workspace_id
       ? `workspace:${msg.payload.workspace_id}`
       : undefined;
+    const sessionHeaders = sessionKey
+      ? {
+          "X-NoDeskClaw-Session-Key": sessionKey,
+          "X-OpenClaw-Session-Key": sessionKey,
+        }
+      : {};
 
     if (msg.payload.no_reply === true) {
       fetch(url, {
@@ -351,7 +357,7 @@ export class TunnelClient {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${this.token}`,
-          ...(sessionKey ? { "X-OpenClaw-Session-Key": sessionKey } : {}),
+          ...sessionHeaders,
         },
         body: JSON.stringify({
           model: this.defaultChatModel,
@@ -379,9 +385,7 @@ export class TunnelClient {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${this.token}`,
-          ...(sessionKey
-            ? { "X-OpenClaw-Session-Key": sessionKey }
-            : {}),
+          ...sessionHeaders,
         },
         body: JSON.stringify({
           model: this.defaultChatModel,

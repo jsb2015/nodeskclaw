@@ -60,6 +60,9 @@ class HermesChannel:
             headers["Authorization"] = f"Bearer {self._api_key}"
         if session_id:
             headers["X-Hermes-Session-Id"] = session_id
+        attribution_session_key = _attribution_session_key_for(workspace_id)
+        if attribution_session_key:
+            headers["X-NoDeskClaw-Session-Key"] = attribution_session_key
 
         payload = {
             "model": self._model,
@@ -172,9 +175,17 @@ class HermesChannel:
 
 
 def _session_id_for(workspace_id: str, request_id: str) -> str:
+    attribution_session_key = _attribution_session_key_for(workspace_id)
+    if attribution_session_key:
+        return attribution_session_key
+    return f"nodeskclaw:{request_id}"
+
+
+def _attribution_session_key_for(workspace_id: str) -> str:
+    workspace_id = str(workspace_id or "").strip()
     if workspace_id:
         return f"workspace:{workspace_id}"
-    return f"nodeskclaw:{request_id}"
+    return ""
 
 
 def _normalize_message(message: dict[str, Any]) -> dict[str, str]:

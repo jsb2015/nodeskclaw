@@ -13,11 +13,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from hermes_nodeskclaw_bridge import plugin
 from hermes_nodeskclaw_bridge.hermes_channel import (
+    HermesChannel,
     _ThinkingPreambleFilter,
+    _attribution_session_key_for,
     _build_learning_prompt,
     _extract_learning_result,
     _failed_learning_result,
     _post_learning_callback,
+    _session_id_for,
 )
 
 
@@ -225,6 +228,41 @@ def test_proposals_schema_does_not_expose_agent_override():
     properties = plugin._PROPOSALS_SCHEMA["parameters"]["properties"]
 
     assert "agent_instance_id" not in properties
+
+
+def test_hermes_channel_session_keys_use_workspace_context():
+    assert _session_id_for("ws-1", "req-1") == "workspace:ws-1"
+    assert _attribution_session_key_for(" ws-1 ") == "workspace:ws-1"
+    assert _session_id_for("", "req-1") == "nodeskclaw:req-1"
+    assert _attribution_session_key_for("") == ""
+
+
+def test_hermes_channel_sends_attribution_session_key(monkeypatch):
+    captured = {}
+
+    async def fake_stream_response(self, headers, payload, request_id, trace_id):
+        captured["headers"] = headers
+        captured["payload"] = payload
+        captured["request_id"] = request_id
+        captured["trace_id"] = trace_id
+
+    monkeypatch.setattr(HermesChannel, "_stream_response", fake_stream_response)
+    channel = HermesChannel(object(), api_key="secret")
+
+    asyncio.run(
+        channel.handle_chat_request(
+            request_id="req-1",
+            trace_id="trace-1",
+            messages=[{"role": "user", "content": "hello"}],
+            workspace_id="ws-1",
+            no_reply=False,
+        )
+    )
+
+    assert captured["headers"]["X-Hermes-Session-Id"] == "workspace:ws-1"
+    assert captured["headers"]["X-NoDeskClaw-Session-Key"] == "workspace:ws-1"
+    assert captured["headers"]["Authorization"] == "Bearer secret"
+    assert captured["payload"]["messages"] == [{"role": "user", "content": "hello"}]
 
 
 def test_proposals_tool_check_trust_uses_current_instance(monkeypatch):

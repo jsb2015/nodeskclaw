@@ -261,7 +261,41 @@ def test_invalid_signed_attribution_token_remains_unattributed(monkeypatch) -> N
     asyncio.run(run_test())
 
 
-def test_session_key_requires_workspace_agent(monkeypatch) -> None:
+def test_standard_session_key_requires_workspace_agent(monkeypatch) -> None:
+    async def run_test() -> None:
+        async def workspace_belongs_to_org(_db, workspace_id, org_id) -> bool:
+            return workspace_id == "ws-1" and org_id == "org-1"
+
+        async def instance_in_workspace(_db, workspace_id, instance_id) -> bool:
+            return workspace_id == "ws-1" and instance_id == "inst-1"
+
+        monkeypatch.setattr(proxy, "_workspace_belongs_to_org", workspace_belongs_to_org)
+        monkeypatch.setattr(proxy, "_instance_in_workspace", instance_in_workspace)
+        request = FakeRequest({}, headers={"x-nodeskclaw-session-key": "workspace:ws-1"})
+
+        workspace_id, source = await proxy._resolve_usage_attribution(
+            request,
+            object(),
+            SimpleNamespace(id="inst-1", org_id="org-1"),
+        )
+
+        assert workspace_id == "ws-1"
+        assert source == "session_key"
+
+    asyncio.run(run_test())
+
+
+def test_standard_session_key_takes_precedence_over_legacy_headers() -> None:
+    request = FakeRequest({}, headers={
+        "x-nodeskclaw-session-key": "workspace:ws-standard",
+        "x-openclaw-session-key": "workspace:ws-openclaw",
+        "x-hermes-session-id": "workspace:ws-hermes",
+    })
+
+    assert proxy._extract_session_workspace_id(request) == "ws-standard"
+
+
+def test_legacy_openclaw_session_header_resolves_workspace(monkeypatch) -> None:
     async def run_test() -> None:
         async def workspace_belongs_to_org(_db, workspace_id, org_id) -> bool:
             return workspace_id == "ws-1" and org_id == "org-1"
@@ -285,6 +319,37 @@ def test_session_key_requires_workspace_agent(monkeypatch) -> None:
     asyncio.run(run_test())
 
 
+def test_hermes_session_header_resolves_workspace(monkeypatch) -> None:
+    async def run_test() -> None:
+        async def workspace_belongs_to_org(_db, workspace_id, org_id) -> bool:
+            return workspace_id == "ws-1" and org_id == "org-1"
+
+        async def instance_in_workspace(_db, workspace_id, instance_id) -> bool:
+            return workspace_id == "ws-1" and instance_id == "inst-1"
+
+        monkeypatch.setattr(proxy, "_workspace_belongs_to_org", workspace_belongs_to_org)
+        monkeypatch.setattr(proxy, "_instance_in_workspace", instance_in_workspace)
+        request = FakeRequest({}, headers={"x-hermes-session-id": "workspace:ws-1"})
+
+        workspace_id, source = await proxy._resolve_usage_attribution(
+            request,
+            object(),
+            SimpleNamespace(id="inst-1", org_id="org-1"),
+        )
+
+        assert workspace_id == "ws-1"
+        assert source == "session_key"
+
+    asyncio.run(run_test())
+
+
+def test_session_key_parser_rejects_non_workspace_and_control_chars() -> None:
+    assert proxy._workspace_id_from_session_key("workspace:ws-1") == "ws-1"
+    assert proxy._workspace_id_from_session_key("nodeskclaw:req-1") is None
+    assert proxy._workspace_id_from_session_key("workspace:ws-1\nx: bad") is None
+    assert proxy._workspace_id_from_session_key("workspace:\x00ws-1") is None
+
+
 def test_session_key_without_workspace_agent_stays_unattributed(monkeypatch) -> None:
     async def run_test() -> None:
         async def workspace_belongs_to_org(_db, workspace_id, org_id) -> bool:
@@ -301,6 +366,64 @@ def test_session_key_without_workspace_agent_stays_unattributed(monkeypatch) -> 
             request,
             object(),
             SimpleNamespace(id="inst-1", org_id="org-1"),
+        )
+
+        assert workspace_id is None
+        assert source == "unattributed"
+
+    asyncio.run(run_test())
+
+
+def test_active_tracking_fallback_resolves_single_workspace_instance(monkeypatch) -> None:
+    async def run_test() -> None:
+        async def active_workspace_ids_for_instance(_db, instance_id, org_id) -> list[str]:
+            assert instance_id == "inst-1"
+            assert org_id == "org-1"
+            return ["ws-1"]
+
+        async def workspace_belongs_to_org(_db, workspace_id, org_id) -> bool:
+            return workspace_id == "ws-1" and org_id == "org-1"
+
+        async def instance_in_workspace(_db, workspace_id, instance_id) -> bool:
+            return workspace_id == "ws-1" and instance_id == "inst-1"
+
+        monkeypatch.setattr(proxy, "_active_workspace_ids_for_instance", active_workspace_ids_for_instance)
+        monkeypatch.setattr(proxy, "_workspace_belongs_to_org", workspace_belongs_to_org)
+        monkeypatch.setattr(proxy, "_instance_in_workspace", instance_in_workspace)
+
+        workspace_id, source = await proxy._resolve_usage_attribution(
+            FakeRequest({}),
+            object(),
+            SimpleNamespace(id="inst-1", org_id="org-1", last_active_workspace_id="ws-1"),
+        )
+
+        assert workspace_id == "ws-1"
+        assert source == "active_tracking"
+
+    asyncio.run(run_test())
+
+
+def test_active_tracking_fallback_skips_multi_workspace_instance(monkeypatch) -> None:
+    async def run_test() -> None:
+        async def active_workspace_ids_for_instance(_db, instance_id, org_id) -> list[str]:
+            assert instance_id == "inst-1"
+            assert org_id == "org-1"
+            return ["ws-1", "ws-2"]
+
+        async def workspace_belongs_to_org(_db, _workspace_id, _org_id) -> bool:
+            return True
+
+        async def instance_in_workspace(_db, _workspace_id, _instance_id) -> bool:
+            return True
+
+        monkeypatch.setattr(proxy, "_active_workspace_ids_for_instance", active_workspace_ids_for_instance)
+        monkeypatch.setattr(proxy, "_workspace_belongs_to_org", workspace_belongs_to_org)
+        monkeypatch.setattr(proxy, "_instance_in_workspace", instance_in_workspace)
+
+        workspace_id, source = await proxy._resolve_usage_attribution(
+            FakeRequest({}),
+            object(),
+            SimpleNamespace(id="inst-1", org_id="org-1", last_active_workspace_id="ws-2"),
         )
 
         assert workspace_id is None
