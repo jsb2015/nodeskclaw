@@ -175,3 +175,58 @@ async def test_mark_agent_grant_accessed_updates_audit_counters() -> None:
     assert grant.last_accessed_at is not None
     assert grant.access_count == 3
     assert db.committed is True
+
+
+async def test_create_grants_for_multiple_references(monkeypatch) -> None:
+    """Multiple file references in one message produce separate grants."""
+    monkeypatch.setattr(
+        file_reference_service,
+        "get_agent_file_download_base_url",
+        lambda: "https://api.example.com/api/v1",
+    )
+    refs = [
+        _ref(id="ref-1", file_id="file-1", display_name="a.pdf"),
+        _ref(id="ref-2", file_id="file-2", display_name="b.pdf"),
+    ]
+    db = _SequenceDb([
+        _ScalarsResult(refs),
+        _ScalarResult(None),
+        _ScalarResult(None),
+    ])
+
+    payload = await file_reference_service.create_agent_grants_for_message(
+        db,
+        workspace_id="ws-1",
+        message_id="msg-1",
+        recipient_agent_id="agent-1",
+    )
+
+    assert len(payload) == 2
+    assert payload[0]["file_id"] == "file-1"
+    assert payload[1]["file_id"] == "file-2"
+    assert len(db.added) == 2
+    assert db.added[0].recipient_agent_id == "agent-1"
+    assert db.added[1].recipient_agent_id == "agent-1"
+
+
+async def test_grant_download_url_includes_workspace_scope(monkeypatch) -> None:
+    """Download URLs are workspace-scoped for isolation."""
+    monkeypatch.setattr(
+        file_reference_service,
+        "get_agent_file_download_base_url",
+        lambda: "https://api.example.com/api/v1",
+    )
+    db = _SequenceDb([
+        _ScalarsResult([_ref()]),
+        _ScalarResult(None),
+    ])
+
+    payload = await file_reference_service.create_agent_grants_for_message(
+        db,
+        workspace_id="ws-1",
+        message_id="msg-1",
+        recipient_agent_id="agent-1",
+    )
+
+    url = payload[0]["download_url"]
+    assert "/workspaces/ws-1/" in url

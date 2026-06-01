@@ -142,3 +142,74 @@ async def test_storage_delete_worker_retries_failure(monkeypatch) -> None:
     assert job.attempt_count == 1
     assert "storage down" in job.last_error
     assert db.committed is True
+
+
+def test_assert_download_allowed_rejects_blocked() -> None:
+    with pytest.raises(ForbiddenError) as exc:
+        file_scan_service.assert_download_allowed("blocked")
+
+    assert exc.value.message_key == "errors.upload.file_scan_blocked"
+
+
+def test_assert_download_allowed_rejects_failed() -> None:
+    with pytest.raises(ForbiddenError) as exc:
+        file_scan_service.assert_download_allowed("failed")
+
+    assert exc.value.message_key == "errors.upload.file_scan_failed"
+
+
+def test_assert_download_allowed_permits_clean() -> None:
+    file_scan_service.assert_download_allowed("clean")
+
+
+def test_assert_download_allowed_permits_skipped() -> None:
+    file_scan_service.assert_download_allowed("skipped")
+
+
+@pytest.mark.asyncio
+async def test_enqueue_scan_deduplicates_existing_pending(monkeypatch) -> None:
+    """If a pending scan job already exists for the same file, enqueue_scan returns it."""
+    async def build_upload_policy(_db):
+        return _async_required_policy()
+
+    monkeypatch.setattr(file_scan_service, "build_upload_policy", build_upload_policy)
+    existing_job = SimpleNamespace(
+        id="existing-job",
+        status="pending",
+        storage_key="key-1",
+    )
+    db = _SequenceDb([_ScalarResult(existing_job)])
+
+    job = await file_scan_service.enqueue_scan(
+        db,
+        workspace_id="ws-1",
+        source="shared_file",
+        file_id="file-1",
+        storage_key="key-1",
+    )
+
+    assert job is existing_job
+    assert len(db.added) == 0
+
+
+@pytest.mark.asyncio
+async def test_storage_delete_worker_max_retries_exhausted(monkeypatch) -> None:
+    """Job marked as failed when max retries exceeded."""
+    async def delete_file(_key: str) -> None:
+        raise RuntimeError("still down")
+
+    monkeypatch.setattr(file_cleanup_service.storage_service, "delete_file", delete_file)
+    job = SimpleNamespace(
+        id="delete-1",
+        storage_key="key-1",
+        status="retrying",
+        attempt_count=4,
+        last_error="",
+        next_attempt_at=datetime.now(timezone.utc) - timedelta(seconds=1),
+    )
+    db = _SequenceDb([_ScalarsResult([job])])
+
+    result = await file_cleanup_service.run_storage_delete_retry_worker(db, max_attempts=5)
+
+    assert result["failed"] == 1
+    assert job.status == "failed"
