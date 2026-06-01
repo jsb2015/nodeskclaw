@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
-import { Folder, File, FolderPlus, Upload, Trash2, Download, Loader2, ChevronRight } from 'lucide-vue-next'
+import { Folder, File, FolderPlus, Upload, Trash2, Download, Loader2, ChevronRight, LoaderCircle, ShieldAlert, AlertTriangle } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import api from '@/services/api'
 import { Button } from '@/components/ui/button'
@@ -22,6 +22,7 @@ interface FileItem {
   content_type: string
   uploader_name: string
   created_at: string
+  scan_status?: string
 }
 
 const currentPath = ref('/')
@@ -272,12 +273,17 @@ watch(() => props.workspaceId, () => {
         <Folder v-if="item.is_directory" class="w-4 h-4 text-primary shrink-0" />
         <File v-else class="w-4 h-4 text-muted-foreground shrink-0" />
         <span class="text-sm flex-1 truncate">{{ item.name }}</span>
+        <LoaderCircle v-if="!item.is_directory && item.scan_status === 'pending'" class="w-3.5 h-3.5 text-yellow-500 animate-spin shrink-0" :title="t('upload.status.pending_scan')" />
+        <ShieldAlert v-else-if="!item.is_directory && item.scan_status === 'blocked'" class="w-3.5 h-3.5 text-red-500 shrink-0" :title="t('upload.status.blocked')" />
+        <AlertTriangle v-else-if="!item.is_directory && item.scan_status === 'failed'" class="w-3.5 h-3.5 text-orange-500 shrink-0" :title="t('upload.status.scan_failed')" />
         <span class="text-xs text-muted-foreground shrink-0">{{ formatSize(item.file_size) }}</span>
         <span class="text-xs text-muted-foreground shrink-0 hidden sm:inline">{{ item.uploader_name }}</span>
         <div class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
           <Button variant="unstyled" size="unstyled"
             v-if="!item.is_directory"
             class="p-1 rounded hover:bg-muted transition-colors"
+            :class="item.scan_status === 'pending' || item.scan_status === 'blocked' || item.scan_status === 'failed' ? 'opacity-40 cursor-not-allowed' : ''"
+            :disabled="item.scan_status === 'pending' || item.scan_status === 'blocked' || item.scan_status === 'failed'"
             @click.stop="downloadFile(item)"
           >
             <Download class="w-3.5 h-3.5" />
