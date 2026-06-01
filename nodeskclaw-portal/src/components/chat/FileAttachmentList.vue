@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, onBeforeUnmount } from 'vue'
-import { FileText, Image as ImageIcon, Download, X, Loader2 } from 'lucide-vue-next'
+import { FileText, Image as ImageIcon, Download, X, Loader2, LoaderCircle, ShieldAlert, AlertTriangle } from 'lucide-vue-next'
 import { useWorkspaceStore, type FileAttachment, type FileReference } from '@/stores/workspace'
 import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
@@ -26,6 +26,7 @@ type DisplayFile = {
   size: number
   content_type: string
   downloadable: boolean
+  scan_status?: string
 }
 
 const files = computed<DisplayFile[]>(() => [
@@ -43,9 +44,14 @@ const files = computed<DisplayFile[]>(() => [
     name: ref.display_name,
     size: ref.size,
     content_type: ref.content_type,
-    downloadable: ref.download_url_available !== false && ref.status !== 'unavailable',
+    downloadable: ref.download_url_available !== false && ref.status !== 'unavailable' && !isScanBlocked(ref.scan_status),
+    scan_status: ref.scan_status,
   })),
 ])
+
+function isScanBlocked(scanStatus?: string): boolean {
+  return scanStatus === 'pending' || scanStatus === 'blocked' || scanStatus === 'failed'
+}
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes}B`
@@ -118,14 +124,23 @@ onBeforeUnmount(() => {
       :key="`${att.source}:${att.id}`"
       class="flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs transition-colors bg-background/60 border-border/60"
       :class="att.downloadable ? 'hover:bg-background hover:border-border' : 'opacity-60 cursor-not-allowed'"
-      :title="isImage(att) ? t('chat.previewImage') : t('chat.downloadFile')"
-      @click="isImage(att) ? openPreview(att) : download(att)"
+      :title="!att.downloadable && att.scan_status === 'pending' ? t('upload.status.pending_scan')
+        : !att.downloadable && att.scan_status === 'blocked' ? t('upload.status.blocked')
+        : !att.downloadable && att.scan_status === 'failed' ? t('upload.status.scan_failed')
+        : isImage(att) ? t('chat.previewImage') : t('chat.downloadFile')"
+      @click="att.downloadable ? (isImage(att) ? openPreview(att) : download(att)) : undefined"
     >
       <ImageIcon v-if="isImage(att)" class="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
       <FileText v-else class="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
       <span class="truncate max-w-[120px]">{{ att.name }}</span>
       <span class="text-muted-foreground shrink-0">({{ formatFileSize(att.size) }})</span>
-      <Download class="w-3 h-3 shrink-0 text-muted-foreground" />
+      <span v-if="att.source === 'shared_file'" class="shrink-0 px-1 py-0.5 rounded text-[10px] font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400">
+        {{ t('upload.references.shared_file').replace(/引用$/, '') }}
+      </span>
+      <LoaderCircle v-if="att.scan_status === 'pending'" class="w-3 h-3 shrink-0 text-yellow-500 animate-spin" />
+      <ShieldAlert v-else-if="att.scan_status === 'blocked'" class="w-3 h-3 shrink-0 text-red-500" />
+      <AlertTriangle v-else-if="att.scan_status === 'failed'" class="w-3 h-3 shrink-0 text-orange-500" />
+      <Download v-else-if="att.downloadable" class="w-3 h-3 shrink-0 text-muted-foreground" />
     </Button>
   </div>
 
