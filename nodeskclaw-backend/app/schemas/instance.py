@@ -16,6 +16,8 @@ class InstanceInfo(BaseModel):
     id: str
     name: str
     slug: str = ""
+    display_name: str | None = Field(default=None, validation_alias="agent_display_name")
+    effective_name: str = ""
     org_id: str | None = None
     cluster_id: str
     namespace: str
@@ -46,7 +48,13 @@ class InstanceInfo(BaseModel):
     def _fill_display_status(self) -> "InstanceInfo":
         if not self.display_status:
             self.display_status = compute_display_status(self.status, self.health_status)
+        if not self.effective_name:
+            self.effective_name = self.display_name or self.name
         return self
+
+
+class UpdateDisplayNameRequest(BaseModel):
+    display_name: str | None = None
 
 
 class UpdateConfigRequest(BaseModel):
