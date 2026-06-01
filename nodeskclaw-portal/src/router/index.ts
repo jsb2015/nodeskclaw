@@ -85,6 +85,7 @@ const ceRoutes: RouteRecordRaw[] = [
       { path: 'llm-keys', name: 'OrgSettingsLlmKeys', component: () => import('@/views/OrgSettingsLlmKeys.vue') },
       { path: 'smtp', name: 'OrgSettingsSmtp', component: () => import('@/views/OrgSettingsSmtp.vue'), meta: { ceOnly: true } },
       { path: 'network', name: 'OrgSettingsNetwork', component: () => import('@/views/OrgSettingsNetwork.vue') },
+      { path: 'upload', name: 'OrgSettingsUpload', component: () => import('@/views/OrgSettingsUpload.vue'), meta: { ceOnly: true } },
       { path: 'members', name: 'OrgMembers', component: () => import('@/views/OrgMembers.vue') },
       { path: 'audit', name: 'OrgSettingsAudit', component: () => import('@/views/OrgSettingsAudit.vue') },
       ...eeOrgSettingsChildren,
