@@ -539,6 +539,43 @@ const enUS = {
     failed: "Office \"{name}\" deploy failed",
     goTo: "Open",
   },
+  upload: {
+    status: {
+      uploading: "Uploading",
+      paused: "Paused",
+      pending_scan: "Waiting for security scan",
+      scan_failed: "Security scan failed",
+      blocked: "File blocked",
+      unavailable: "File unavailable",
+    },
+    actions: {
+      pause: "Pause upload",
+      resume: "Resume upload",
+      cancel: "Cancel upload",
+      retry: "Retry upload",
+      keep_both: "Keep both",
+      overwrite: "Overwrite file",
+      upload_to_shared_file: "Upload to shared files",
+    },
+    hints: {
+      chat_limit_exceeded: "File exceeds the chat attachment limit. Upload it to shared files and reference it in the message.",
+      direct_upload_unavailable: "Object storage direct upload is unavailable in this deployment.",
+      storage_unavailable: "File storage service is unavailable.",
+      gateway_limit_lower: "Gateway upload limit is lower than the application upload limit.",
+    },
+    references: {
+      chat_attachment: "Chat attachment reference",
+      shared_file: "Shared file reference",
+      large_input: "Large input reference",
+      unavailable: "File reference is not downloadable",
+    },
+    settings: {
+      chat_attachment_limit: "Chat attachment limit",
+      shared_file_limit: "Shared file limit",
+      workspace_quota: "Workspace file quota",
+      security_scan_mode: "File security scan mode",
+    },
+  },
   blackboard: {
     tabObjectivesTasks: "Goals/Tasks",
     tabStatus: "Status",
@@ -1735,6 +1772,12 @@ const enUS = {
     },
     file: {
       invalid_base64: "File content format is invalid. Please upload the file again.",
+    },
+    upload: {
+      file_too_large: "File exceeds the current upload limit",
+      storage_unavailable: "File storage service is unavailable",
+      base64_upload_disabled: "Base64 upload is disabled. Please upload a file instead.",
+      invalid_download_range: "Download range is invalid",
     },
     managed_files: {
       resource_not_found: "Managed file resource does not exist",

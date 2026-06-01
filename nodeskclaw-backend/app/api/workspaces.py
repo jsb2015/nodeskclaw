@@ -1207,9 +1207,6 @@ async def search_users(
 
 # ── Group Chat (Broadcast) ───────────────────────────
 
-MAX_UPLOAD_SIZE = 20 * 1024 * 1024
-
-
 @router.post("/{workspace_id}/files/upload")
 async def upload_workspace_file(
     workspace_id: str,
@@ -1219,29 +1216,43 @@ async def upload_workspace_file(
 ):
     """Upload a file to a workspace (multipart/form-data)."""
     from app.services import storage_service
+    from app.services.upload_policy_service import get_surface_max_bytes
     from app.models.workspace_file import WorkspaceFile
 
     if not storage_service.is_configured():
-        raise _error(503, 50301, "errors.storage.not_configured", "对象存储未配置")
+        raise _error(503, 50301, "errors.upload.storage_unavailable", "文件存储服务不可用")
 
     await wm_service.check_workspace_access(workspace_id, user, "send_chat", db)
 
-    content = await file.read()
-    if len(content) > MAX_UPLOAD_SIZE:
-        raise _error(400, 40002, "errors.file.too_large", "文件大小超过限制（最大 20MB）")
-
-    storage_key = await storage_service.upload_file(
-        file_content=content,
-        filename=file.filename or "unnamed",
-        content_type=file.content_type or "application/octet-stream",
-        workspace_id=workspace_id,
-    )
+    max_bytes = await get_surface_max_bytes("chat_attachment", db)
+    try:
+        storage_key, file_size, _checksum = await storage_service.upload_file_object(
+            file,
+            file.filename or "unnamed",
+            file.content_type or "application/octet-stream",
+            workspace_id,
+            max_bytes=max_bytes,
+        )
+    except storage_service.UploadTooLargeError as exc:
+        raise _error(
+            413,
+            41302,
+            "errors.upload.file_too_large",
+            f"文件大小超过限制（最大 {exc.limit_bytes // 1024 // 1024}MB）",
+        ) from exc
+    except storage_service.StorageUnavailableError as exc:
+        raise _error(
+            503,
+            50301,
+            "errors.upload.storage_unavailable",
+            f"文件存储服务不可用：{exc.reason_code}",
+        ) from exc
 
     wf = WorkspaceFile(
         workspace_id=workspace_id,
         uploader_id=user.id,
         original_name=file.filename or "unnamed",
-        file_size=len(content),
+        file_size=file_size,
         content_type=file.content_type or "application/octet-stream",
         storage_key=storage_key,
     )

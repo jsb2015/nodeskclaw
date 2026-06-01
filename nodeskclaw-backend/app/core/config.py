@@ -138,6 +138,7 @@ class Settings(BaseSettings):
 
     # ── Agent API（AI 员工 Pod 回调后端的内网地址）────────
     AGENT_API_BASE_URL: str = "http://localhost:4510/api/v1"
+    AGENT_FILE_DOWNLOAD_BASE_URL: str = ""
     GENE_CALLBACK_SECRET: str = ""
     ALLOW_LEGACY_GENE_CALLBACKS: bool = False
 
@@ -175,6 +176,23 @@ class Settings(BaseSettings):
     # ── 本地文件存储（S3 未配置时自动启用）─────────────────
     LOCAL_STORAGE_DIR: str = ""
 
+    # ── 文件上传策略 ─────────────────────────────────────
+    UPLOAD_STORAGE_BACKEND: str = "auto"
+    UPLOAD_GATEWAY_PROXY_BODY_SIZE_MB: int = 50
+    UPLOAD_PROXY_READ_TIMEOUT_SECONDS: int = 300
+    UPLOAD_PROXY_SEND_TIMEOUT_SECONDS: int = 300
+    UPLOAD_CHAT_ATTACHMENT_MAX_MB: int = 20
+    UPLOAD_SHARED_FILE_MAX_MB: int = 200
+    UPLOAD_CHUNKED_UPLOAD_THRESHOLD_MB: int = 50
+    UPLOAD_WORKSPACE_QUOTA_MB: int = 10240
+    UPLOAD_SECURITY_SCAN_MODE: str = "metadata_only"
+    UPLOAD_SCANNER_PROVIDER: str = "none"
+    UPLOAD_SCANNER_ENDPOINT: str = ""
+    UPLOAD_SCANNER_TIMEOUT_SECONDS: int = 60
+    UPLOAD_SCANNER_MAX_RETRIES: int = 3
+    UPLOAD_SCANNER_MAX_FILE_MB: int = 200
+    UPLOAD_SCANNER_FAIL_CLOSED: bool = True
+
     # ── 匿名安装遥测（CE-only）─────────────────────────────
     TELEMETRY_ENABLED: bool = True
     POSTHOG_HOST: str = "https://us.i.posthog.com"
@@ -199,6 +217,11 @@ def _strip_api_path(base_url: str) -> str:
     return urlunsplit((parsed.scheme, parsed.netloc, path, "", "")).rstrip("/")
 
 
+def _normalize_api_v1_base_url(base_url: str) -> str:
+    stripped = _strip_api_path(base_url)
+    return f"{stripped}/api/v1" if stripped else ""
+
+
 def get_nodeskclaw_webhook_base_url(cfg: Settings | None = None) -> str:
     active_settings = cfg or settings
     candidates = [
@@ -211,3 +234,12 @@ def get_nodeskclaw_webhook_base_url(cfg: Settings | None = None) -> str:
         if normalized:
             return normalized
     return ""
+
+
+def get_agent_file_download_base_url(cfg: Settings | None = None) -> str:
+    active_settings = cfg or settings
+    base_url = (
+        getattr(active_settings, "AGENT_FILE_DOWNLOAD_BASE_URL", "")
+        or getattr(active_settings, "AGENT_API_BASE_URL", "")
+    )
+    return _normalize_api_v1_base_url(base_url)

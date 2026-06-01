@@ -2,7 +2,6 @@
 
 import asyncio
 import base64
-import binascii
 import logging
 from collections.abc import Sequence
 from datetime import datetime
@@ -1762,11 +1761,72 @@ async def upload_shared_file_bytes(
     content_type: str,
     parent_path: str = "/",
 ) -> FileInfo:
-    parent_path = _validate_path(parent_path)
     storage_key = await storage_service.upload_file(
         file_bytes, filename, content_type,
         workspace_id,
     )
+    return await _upsert_shared_file_metadata(
+        db,
+        workspace_id,
+        uploader_type,
+        uploader_id,
+        uploader_name,
+        filename=filename,
+        file_size=len(file_bytes),
+        content_type=content_type,
+        storage_key=storage_key,
+        parent_path=parent_path,
+    )
+
+
+async def upload_shared_file_object(
+    db: AsyncSession,
+    workspace_id: str,
+    uploader_type: str,
+    uploader_id: str,
+    uploader_name: str,
+    *,
+    file_obj,
+    filename: str,
+    content_type: str,
+    parent_path: str = "/",
+    max_bytes: int | None = None,
+) -> FileInfo:
+    storage_key, file_size, _checksum = await storage_service.upload_file_object(
+        file_obj,
+        filename,
+        content_type,
+        workspace_id,
+        max_bytes=max_bytes,
+    )
+    return await _upsert_shared_file_metadata(
+        db,
+        workspace_id,
+        uploader_type,
+        uploader_id,
+        uploader_name,
+        filename=filename,
+        file_size=file_size,
+        content_type=content_type,
+        storage_key=storage_key,
+        parent_path=parent_path,
+    )
+
+
+async def _upsert_shared_file_metadata(
+    db: AsyncSession,
+    workspace_id: str,
+    uploader_type: str,
+    uploader_id: str,
+    uploader_name: str,
+    *,
+    filename: str,
+    file_size: int,
+    content_type: str,
+    storage_key: str,
+    parent_path: str = "/",
+) -> FileInfo:
+    parent_path = _validate_path(parent_path)
     existing = (await db.execute(
         select(BlackboardFile).where(
             BlackboardFile.workspace_id == workspace_id,
@@ -1780,7 +1840,7 @@ async def upload_shared_file_bytes(
         if existing.storage_key:
             await storage_service.delete_file(existing.storage_key)
         existing.storage_key = storage_key
-        existing.file_size = len(file_bytes)
+        existing.file_size = file_size
         existing.content_type = content_type
         existing.uploader_type = uploader_type
         existing.uploader_id = uploader_id
@@ -1794,7 +1854,7 @@ async def upload_shared_file_bytes(
         parent_path=parent_path,
         name=filename,
         is_directory=False,
-        file_size=len(file_bytes),
+        file_size=file_size,
         content_type=content_type,
         storage_key=storage_key,
         uploader_type=uploader_type,
@@ -1815,17 +1875,9 @@ async def upload_shared_file(
     uploader_name: str,
     data: FileWriteRequest,
 ) -> FileInfo:
-    try:
-        file_bytes = base64.b64decode(data.content, validate=True)
-    except (binascii.Error, ValueError) as exc:
-        raise BadRequestError(
-            "文件内容不是有效的 Base64 编码",
-            message_key="errors.file.invalid_base64",
-        ) from exc
-    return await upload_shared_file_bytes(
-        db, workspace_id, uploader_type, uploader_id, uploader_name,
-        filename=data.filename, file_bytes=file_bytes,
-        content_type=data.content_type, parent_path=data.parent_path,
+    raise BadRequestError(
+        "base64 上传已禁用，请使用 multipart/form-data 上传",
+        message_key="errors.upload.base64_upload_disabled",
     )
 
 

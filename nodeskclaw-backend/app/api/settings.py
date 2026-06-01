@@ -13,6 +13,7 @@ from app.core.security import get_current_user
 from app.models.user import User
 from app.schemas.common import ApiResponse
 from app.services import config_service
+from app.services.upload_policy_service import UPLOAD_CONFIG_KEYS
 from app.services.runtime.registries.runtime_registry import RUNTIME_REGISTRY
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ _ALLOWED_KEYS = {
     "network_policy_ingress_enabled", "network_policy_egress_enabled",
     "ingress_allow_cidrs",
     "instance_spec_presets",
+    *UPLOAD_CONFIG_KEYS,
 }
 
 _SENSITIVE_KEYS = {"registry_password", "smtp_password"}

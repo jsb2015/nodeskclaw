@@ -33,7 +33,7 @@ from app.api.workspaces import router as workspace_router
 from app.api.templates import router as template_router
 from app.api.workspace_deploys import router as workspace_deploys_router
 from app.api.instance_templates import router as instance_template_router
-from app.core.deps import require_ce_edition, require_org_admin, require_org_role
+from app.core.deps import get_db, require_ce_edition, require_org_admin, require_org_role
 from app.core.exceptions import ForbiddenError, NotFoundError
 from app.core.feature_gate import feature_gate
 from app.core.config import settings
@@ -78,11 +78,13 @@ async def system_info():
 
 
 @api_router.get("/system/capabilities", tags=["系统"])
-async def system_capabilities():
+async def system_capabilities(db=Depends(get_db)):
     """暴露系统能力状态（如文件上传是否可用），供前端控制 UI 状态。"""
-    from app.services import storage_service
+    from app.services.upload_policy_service import build_upload_policy
+    upload_policy = await build_upload_policy(db)
     return {
-        "file_upload_enabled": storage_service.is_configured(),
+        "file_upload_enabled": upload_policy["storage_status"] == "available",
+        "upload_policy": upload_policy,
     }
 
 

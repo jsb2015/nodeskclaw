@@ -10,7 +10,8 @@ from app.schemas.workspace import (
     FileWriteRequest,
     MkdirRequest,
 )
-from app.services import workspace_service
+from app.services import storage_service, workspace_service
+from app.services.upload_policy_service import get_surface_max_bytes
 from app.services.workspace_actor_access import (
     require_workspace_actor_access,
     require_workspace_actor_member,
@@ -100,9 +101,17 @@ async def upload_file(
     await require_workspace_actor_access(workspace_id, user, "edit_blackboard", db)
     await _enforce_agent_blackboard_topology(workspace_id, db)
     utype, uid, uname = _caller_info()
-    info = await workspace_service.upload_shared_file(
-        db, workspace_id, utype, uid, uname, data,
-    )
+    try:
+        info = await workspace_service.upload_shared_file(
+            db, workspace_id, utype, uid, uname, data,
+        )
+    except storage_service.StorageUnavailableError as exc:
+        raise HTTPException(status_code=503, detail={
+            "error_code": 50310,
+            "message_key": "errors.upload.storage_unavailable",
+            "message": "文件存储服务不可用",
+            "details": {"reason_code": exc.reason_code},
+        }) from exc
     _broadcast(workspace_id, "file:uploaded", info.model_dump(mode="json"))
     return _ok(info.model_dump(mode="json"))
 
@@ -120,16 +129,37 @@ async def upload_file_multipart(
     await require_workspace_actor_access(workspace_id, user, "edit_blackboard", db)
     await _enforce_agent_blackboard_topology(workspace_id, db)
     utype, uid, uname = _caller_info()
-    file_bytes = await file.read()
     resolved_filename = filename or file.filename or "untitled"
     resolved_ct = content_type or file.content_type or "application/octet-stream"
-    info = await workspace_service.upload_shared_file_bytes(
-        db, workspace_id, utype, uid, uname,
-        filename=resolved_filename,
-        file_bytes=file_bytes,
-        content_type=resolved_ct,
-        parent_path=parent_path,
-    )
+    max_bytes = await get_surface_max_bytes("shared_file", db)
+    try:
+        info = await workspace_service.upload_shared_file_object(
+            db, workspace_id, utype, uid, uname,
+            file_obj=file,
+            filename=resolved_filename,
+            content_type=resolved_ct,
+            parent_path=parent_path,
+            max_bytes=max_bytes,
+        )
+    except storage_service.UploadTooLargeError as exc:
+        raise HTTPException(status_code=413, detail={
+            "error_code": 41310,
+            "message_key": "errors.upload.file_too_large",
+            "message": "文件超过当前上传上限",
+            "message_params": {
+                "limit_mb": str(round(exc.limit_bytes / 1024 / 1024, 2)),
+                "actual_mb": str(round(exc.actual_bytes / 1024 / 1024, 2)),
+                "surface": "shared_file",
+                "recommended_surface": "large_input",
+            },
+        }) from exc
+    except storage_service.StorageUnavailableError as exc:
+        raise HTTPException(status_code=503, detail={
+            "error_code": 50310,
+            "message_key": "errors.upload.storage_unavailable",
+            "message": "文件存储服务不可用",
+            "details": {"reason_code": exc.reason_code},
+        }) from exc
     _broadcast(workspace_id, "file:uploaded", info.model_dump(mode="json"))
     return _ok(info.model_dump(mode="json"))
 

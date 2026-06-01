@@ -539,6 +539,43 @@ const zhCN = {
     failed: "办公室「{name}」部署失败",
     goTo: "进入",
   },
+  upload: {
+    status: {
+      uploading: "上传中",
+      paused: "已暂停",
+      pending_scan: "等待安全扫描",
+      scan_failed: "安全扫描失败",
+      blocked: "文件已被阻断",
+      unavailable: "文件当前不可用",
+    },
+    actions: {
+      pause: "暂停上传",
+      resume: "继续上传",
+      cancel: "取消上传",
+      retry: "重试上传",
+      keep_both: "保留两者",
+      overwrite: "覆盖原文件",
+      upload_to_shared_file: "上传到共享文件",
+    },
+    hints: {
+      chat_limit_exceeded: "文件超过对话附件上限，请上传到共享文件后在消息中引用",
+      direct_upload_unavailable: "当前部署暂不支持对象存储直传",
+      storage_unavailable: "文件存储服务不可用",
+      gateway_limit_lower: "网关上限低于应用上传上限",
+    },
+    references: {
+      chat_attachment: "对话附件引用",
+      shared_file: "共享文件引用",
+      large_input: "大文件输入引用",
+      unavailable: "文件引用不可下载",
+    },
+    settings: {
+      chat_attachment_limit: "对话附件上限",
+      shared_file_limit: "共享文件上限",
+      workspace_quota: "工作区文件总配额",
+      security_scan_mode: "文件安全扫描模式",
+    },
+  },
   blackboard: {
     tabObjectivesTasks: "目标/任务",
     tabStatus: "状态",
@@ -1735,6 +1772,12 @@ const zhCN = {
     },
     file: {
       invalid_base64: "文件内容格式错误，请重新上传文件",
+    },
+    upload: {
+      file_too_large: "文件超过当前上传上限",
+      storage_unavailable: "文件存储服务不可用",
+      base64_upload_disabled: "base64 上传已禁用，请使用文件上传",
+      invalid_download_range: "下载范围无效",
     },
     managed_files: {
       resource_not_found: "受控文件资源不存在",
