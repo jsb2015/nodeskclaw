@@ -49,6 +49,8 @@ async def list_conversations(
     user, org = org_ctx
     await _check_workspace(workspace_id, org, db)
     await wm_service.check_workspace_member(workspace_id, user, db)
+    await conversation_service.sync_conversations_from_topology(workspace_id, db)
+    await db.commit()
     convs = await conversation_service.list_conversations(workspace_id, db)
     return _ok([
         {

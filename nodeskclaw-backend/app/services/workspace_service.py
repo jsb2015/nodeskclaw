@@ -140,6 +140,8 @@ async def create_workspace(db: AsyncSession, org_id: str, user_id: str, data: Wo
     )
     db.add(schedule)
 
+    from app.services import conversation_service
+    await conversation_service.sync_conversations_and_notify_topology(ws.id, db)
     await db.commit()
     await db.refresh(ws)
 
@@ -233,6 +235,8 @@ async def _apply_template_to_workspace(
         if bb_row:
             bb_row.content = bb_snap["content"]
 
+    from app.services import conversation_service
+    await conversation_service.sync_conversations_and_notify_topology(workspace_id, db)
     await db.commit()
 
 
@@ -333,6 +337,8 @@ async def apply_internal_deploy_topology(
                 created_by=user_id,
             ))
 
+    from app.services import conversation_service
+    await conversation_service.sync_conversations_and_notify_topology(workspace_id, db)
     await db.commit()
 
 
