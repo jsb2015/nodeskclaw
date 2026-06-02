@@ -58,8 +58,6 @@ const ceRoutes: RouteRecordRaw[] = [
       { path: 'runtime', name: 'InstanceRuntime', component: () => import('@/views/InstanceRuntime.vue') },
       { path: 'genes', name: 'InstanceGenes', component: () => import('@/views/InstanceGenes.vue') },
       { path: 'evolution', name: 'EvolutionLog', component: () => import('@/views/EvolutionLog.vue') },
-
-      { path: 'channels', name: 'InstanceChannels', component: () => import('@/views/InstanceChannels.vue') },
       { path: 'settings', name: 'InstanceSettings', component: () => import('@/views/InstanceSettings.vue') },
       { path: 'files', name: 'InstanceFiles', component: () => import('@/views/InstanceFiles.vue') },
       { path: 'backups', name: 'InstanceBackups', component: () => import('@/views/InstanceBackups.vue') },
