@@ -24,7 +24,7 @@ usage() {
 选项:
   --tag TAG       必填，目标镜像标签
   --ee            EE 模式（包含 admin）
-  --staging       staging 环境（默认，可省略）
+  --staging       staging 环境（需显式指定）
   --prod          生产环境（需交互确认）
   --context CTX   覆盖默认 K8s 上下文
   --skip-proxy    all 时跳过 proxy
@@ -107,6 +107,7 @@ TARGET="all"
 TAG=""
 SKIP_PROXY=false
 IS_PROD=false
+IS_STAGING=false
 EE_MODE=false
 CE_ONLY=true
 MIRRORS="${MIRRORS:-}"
@@ -131,8 +132,8 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --tag)         require_option_value "$1" "${2:-}"; TAG="$2"; shift ;;
     --ee)          EE_MODE=true ;;
-    --staging)     IS_PROD=false ;;
-    --prod)        IS_PROD=true ;;
+    --staging)     IS_STAGING=true; IS_PROD=false ;;
+    --prod)        IS_PROD=true; IS_STAGING=false ;;
     --context)     require_option_value "$1" "${2:-}"; KUBE_CONTEXT="$2"; shift ;;
     --skip-proxy)  SKIP_PROXY=true ;;
     --mirrors)     require_option_value "$1" "${2:-}"; MIRRORS="$2"; shift ;;

@@ -79,8 +79,8 @@ cd ee && git status --short               # EE 仓库状态
 # 1. 发版（构建镜像 + git tag + GitHub Pre-release）
 ./deploy/release.sh create <version> --ee --mirrors cn
 
-# 2. 部署到 staging（可选）
-./deploy/deploy.sh deploy all --tag <version> --ee --staging --context <CTX>
+# 2. 部署到生产（需用户明确授权）
+./deploy/deploy.sh deploy all --tag <version> --ee --prod --context <CTX>
 ```
 
 ### 场景 B：CE Pre-release
@@ -89,22 +89,22 @@ cd ee && git status --short               # EE 仓库状态
 ./deploy/release.sh create <version> --mirrors cn
 ```
 
-### 场景 C：日常部署到 staging
+### 场景 C：日常部署到生产
 
 ```bash
-./deploy/deploy.sh deploy all --tag <version> --staging --context <CTX>       # CE
-./deploy/deploy.sh deploy all --tag <version> --ee --staging --context <CTX>  # EE
-./deploy/deploy.sh deploy backend --tag <version> --staging --context <CTX>   # 只部署后端
+./deploy/deploy.sh deploy all --tag <version> --prod --context <CTX>       # CE
+./deploy/deploy.sh deploy all --tag <version> --ee --prod --context <CTX>  # EE
+./deploy/deploy.sh deploy backend --tag <version> --prod --context <CTX>   # 只部署后端
 ```
 
 ### 场景 D：部署指定版本（不重新构建）
 
 ```bash
-./deploy/deploy.sh deploy all --tag <version> --staging --context <CTX> # staging
 ./deploy/deploy.sh deploy all --tag <version> --prod --context <CTX>    # 生产
+./deploy/deploy.sh deploy all --tag <version> --staging --context <CTX> # 可选临时 staging
 ```
 
-### 场景 E：正式发布（staging 转生产）
+### 场景 E：正式发布
 
 ```bash
 ./deploy/deploy.sh deploy all --tag <version> --prod --context <CTX>

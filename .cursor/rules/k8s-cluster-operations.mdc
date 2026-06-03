@@ -53,14 +53,14 @@ alwaysApply: true
 
 **部署脚本（`deploy/deploy.sh`、`deploy/init.sh`）和 kubectl 操作必须同时明确目标环境，缺一不可。**
 
-同一个集群上可能同时存在生产和 staging 环境（不同 namespace），仅确认 context 不等于确认了目标环境。
+同一个集群上可能同时存在多个环境（不同 namespace），仅确认 context 不等于确认了目标环境。
 
 ### 已知环境映射
 
 | 环境 | context | namespace |
 |------|---------|-----------|
 | 生产 | `nodesk-infra-vke-dev-dmz-01` | `nodeskclaw-system` |
-| staging | `nodesk-infra-vke-dev-dmz-01` | `nodeskclaw-staging` |
+| staging（仅在显式初始化临时验证环境后存在） | `nodesk-infra-vke-dev-dmz-01` | `nodeskclaw-staging` |
 | 实例集群 | `nodeskclaw-inst-dev-01` | 按实例动态分配 |
 
 ### 必须做
@@ -71,14 +71,14 @@ alwaysApply: true
 
 ### 严禁
 
-- **禁止在需要生产部署时省略 `--prod`**：`deploy.sh deploy` 默认部署到 staging，生产需显式 `--prod`
+- **禁止在需要生产部署时省略 `--prod`**：部署脚本要求显式指定 `--prod` 或 `--staging`
 - **禁止假设环境**：用户说"staging"就查 staging namespace，说"生产"就查生产 namespace，不要自己猜
 - **禁止只确认 context 不确认 namespace**：同一 context 下有多个环境，只确认 context 不够
 
 ### 部署命令示例
 
 ```bash
-# staging 部署（默认环境）
+# staging 部署（仅在临时验证环境存在时）
 ./deploy/deploy.sh deploy backend --tag <TAG> --staging --context nodesk-infra-vke-dev-dmz-01
 
 # 生产部署（需用户明确授权）

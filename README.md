@@ -170,16 +170,17 @@ cp nodeskclaw-backend/.env.example nodeskclaw-backend/.env
 Creates the namespace, uploads `.env` as a K8s Secret, and applies base Deployment + Service manifests:
 
 ```bash
-./deploy/init.sh --staging --context <CTX>  # Default: staging namespace
 ./deploy/init.sh --prod --context <CTX>     # Production namespace
+# Optional temporary validation namespace:
+./deploy/init.sh --staging --context <CTX>
 ```
 
 #### 4. Release & Deploy
 
 ```bash
 ./deploy/release.sh create v0.9.0
-./deploy/deploy.sh deploy --tag v0.9.0 --staging --context <CTX>
-./deploy/deploy.sh deploy backend --tag v0.9.0 --staging --context <CTX>
+./deploy/deploy.sh deploy --tag v0.9.0 --prod --context <CTX>
+./deploy/deploy.sh deploy backend --tag v0.9.0 --prod --context <CTX>
 ```
 
 #### 5. Configure Ingress
@@ -275,7 +276,7 @@ Open `http://localhost:4517` and sign in with the printed credentials. You will 
 
 ### Kubernetes
 
-K8s releases and deployments are managed by separate scripts. The typical workflow is **create a release artifact, deploy it to staging, then deploy the same tag to production**.
+K8s releases and deployments are managed by separate scripts. The typical workflow is **create a release artifact, run local validation, deploy the same tag to production, then run production smoke checks**. A temporary staging namespace can still be initialized explicitly when a separate validation environment is needed.
 
 **Create release artifacts** -- build images, push to registry, tag git, and create a GitHub Pre-release:
 
@@ -283,7 +284,7 @@ K8s releases and deployments are managed by separate scripts. The typical workfl
 ./deploy/release.sh create v0.9.0
 ```
 
-**Staging** -- reuse the released images and update the staging namespace:
+**Optional temporary staging** -- reuse the released images and update an explicitly initialized staging namespace:
 
 ```bash
 ./deploy/deploy.sh deploy --tag v0.9.0 --staging --context <CTX>

@@ -153,8 +153,11 @@ configure_kubectl() {
 set_namespace() {
   if [[ "${IS_PROD:-false}" == true ]]; then
     NAMESPACE="$PROD_NS"
-  else
+  elif [[ "${IS_STAGING:-false}" == true ]]; then
     NAMESPACE="$STAGING_NS"
+  else
+    err "必须显式指定目标环境: --prod 或 --staging"
+    exit 1
   fi
 }
 

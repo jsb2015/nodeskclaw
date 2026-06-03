@@ -60,29 +60,29 @@ KUBE_CONTEXT="<YOUR_KUBECTL_CONTEXT>"
 部署只使用已存在镜像 tag，`--tag` 必填：
 
 ```bash
-./deploy/deploy.sh deploy --tag v0.5.0 --staging --context <CTX>
-./deploy/deploy.sh deploy backend --tag v0.5.0 --staging --context <CTX>
-./deploy/deploy.sh deploy proxy --tag v0.5.0 --staging --context <CTX>
 ./deploy/deploy.sh deploy --tag v0.5.0 --prod --context <CTX>
+./deploy/deploy.sh deploy backend --tag v0.5.0 --prod --context <CTX>
+./deploy/deploy.sh deploy proxy --tag v0.5.0 --prod --context <CTX>
 ```
 
 EE 模式：
 
 ```bash
-./deploy/deploy.sh deploy --tag v0.5.0 --ee --staging --context <CTX>
-./deploy/deploy.sh deploy admin --tag v0.5.0 --ee --staging --context <CTX>
-./deploy/deploy.sh deploy --tag v0.5.0 --ee --skip-proxy --staging --context <CTX>
+./deploy/deploy.sh deploy --tag v0.5.0 --ee --prod --context <CTX>
+./deploy/deploy.sh deploy admin --tag v0.5.0 --ee --prod --context <CTX>
+./deploy/deploy.sh deploy --tag v0.5.0 --ee --skip-proxy --prod --context <CTX>
 ```
 
-生产部署会先展示当前镜像和目标镜像，并要求交互确认。部署脚本不构建镜像、不推送镜像、不修改 GitHub Release。
+生产部署会先展示当前镜像和目标镜像，并要求交互确认。部署脚本不构建镜像、不推送镜像、不修改 GitHub Release。需要独立验证环境时，可以先显式初始化临时 staging namespace，再把上述命令的 `--prod` 替换为 `--staging`。
 
 ## 首次初始化
 
 ```bash
-./deploy/init.sh --staging --context <CTX>
 ./deploy/init.sh --prod --context <CTX>
-./deploy/init.sh --env-file path/to/.env --staging --context <CTX>
-./deploy/init.sh --ee --staging --context <CTX>
+./deploy/init.sh --env-file path/to/.env --prod --context <CTX>
+./deploy/init.sh --ee --prod --context <CTX>
+# 可选临时验证 namespace：
+./deploy/init.sh --staging --context <CTX>
 ```
 
 初始化会创建 Namespace、写入后端 Secret，并应用基础 Deployment/Service 清单。Ingress 仍需配置域名后手动 apply：
@@ -109,11 +109,10 @@ kubectl --context <CTX> -n <NS> apply -f deploy/k8s/ingress.yaml
 
 ## 标准流程
 
-Staging 验证：
+本地验证：
 
 ```bash
 ./deploy/release.sh create v0.5.0
-./deploy/deploy.sh deploy --tag v0.5.0 --staging --context <CTX>
 ```
 
 生产发布：

@@ -70,11 +70,11 @@ uv run uvicorn app.main:app --port 8080 --reload
 # 构建 + 推送版本镜像
 ./deploy/release.sh create v0.1.0-beta.1
 
-# 使用指定 tag 更新 staging K8s（不重新构建）
-./deploy/deploy.sh deploy proxy --tag v0.1.0-beta.1 --staging --context <CTX>
-
 # 部署到生产
 ./deploy/deploy.sh deploy proxy --tag v0.1.0-beta.1 --prod --context <CTX>
+
+# 如需独立验证环境，可显式初始化临时 staging 后部署
+./deploy/deploy.sh deploy proxy --tag v0.1.0-beta.1 --staging --context <CTX>
 ```
 
 脚本从 `deploy/.env.local` 读取 REGISTRY 和 KUBE_CONTEXT 配置，也可以用 `--context` 覆盖。

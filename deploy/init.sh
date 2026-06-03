@@ -15,7 +15,7 @@ usage() {
 
 选项:
   --ee             EE 模式（包含 admin，写入 NODESKCLAW_EDITION=ee）
-  --staging        staging 环境（默认，可省略）
+  --staging        staging 环境（需显式指定）
   --prod           生产环境
   --context CTX    覆盖默认 K8s 上下文
   --env-file FILE  指定 .env 文件（默认 nodeskclaw-backend/.env）
@@ -111,10 +111,13 @@ cmd_init() {
   log "Ingress 需要单独配置域名后手动 apply:"
   log "  kubectl --context $KUBE_CONTEXT -n $NAMESPACE apply -f $DEPLOY_DIR/k8s/ingress.yaml"
 
+  local env_flag="--staging"
+  [[ "$IS_PROD" == true ]] && env_flag="--prod"
+
   echo ""
   log "初始化完成。接下来运行部署:"
   echo ""
-  echo "  ./deploy/deploy.sh deploy --tag <TAG> --context $KUBE_CONTEXT"
+  echo "  ./deploy/deploy.sh deploy --tag <TAG> $env_flag --context $KUBE_CONTEXT"
   echo ""
   log "当前 Deployment 状态:"
   $KUBECTL -n "$NAMESPACE" get deployments \
@@ -124,14 +127,15 @@ cmd_init() {
 ENV_FILE=""
 FORCE=false
 IS_PROD=false
+IS_STAGING=false
 EE_MODE=false
 CE_ONLY=true
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --ee)          EE_MODE=true ;;
-    --staging)     IS_PROD=false ;;
-    --prod)        IS_PROD=true ;;
+    --staging)     IS_STAGING=true; IS_PROD=false ;;
+    --prod)        IS_PROD=true; IS_STAGING=false ;;
     --context)     require_option_value "$1" "${2:-}"; KUBE_CONTEXT="$2"; shift ;;
     --env-file)    require_option_value "$1" "${2:-}"; ENV_FILE="$2"; shift ;;
     --force)       FORCE=true ;;
