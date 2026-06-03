@@ -31,7 +31,7 @@ const allNavItems: NavItem[] = [
   { name: 'OrgSettingsGenes', label: () => t('orgSettings.requiredGenesTab'), icon: Dna },
   { name: 'OrgSettingsSmtp', label: () => t('orgSettings.smtpTitle'), icon: Mail, ceOnly: true },
   { name: 'OrgSettingsNetwork', label: () => t('orgSettings.networkTab'), icon: Globe, ceOnly: true },
-  { name: 'OrgSettingsUpload', label: () => t('orgSettings.uploadTab'), icon: Upload, ceOnly: true },
+  { name: 'OrgSettingsUpload', label: () => t('orgSettings.uploadTab'), icon: Upload },
   { name: 'OrgEnterpriseFiles', label: () => t('enterpriseFiles.title'), icon: FolderOpen, matchPrefix: '/org-settings/files' },
   { name: 'OrgSettingsAudit', label: () => t('auditLogs.title'), icon: ScrollText },
 ]
