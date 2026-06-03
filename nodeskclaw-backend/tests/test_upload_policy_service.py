@@ -41,6 +41,87 @@ def test_storage_status_does_not_fallback_to_local_for_partial_s3(monkeypatch) -
     assert status["storage_reason_code"] == "s3_config_incomplete"
 
 
+def test_storage_status_reports_s3_direct_upload_when_health_and_cors_pass(monkeypatch) -> None:
+    class FakeS3Client:
+        def head_bucket(self, **_kwargs):
+            return {}
+
+        def put_object(self, **_kwargs):
+            return {}
+
+        def delete_object(self, **_kwargs):
+            return {}
+
+        def create_multipart_upload(self, **_kwargs):
+            return {"UploadId": "upload-id"}
+
+        def abort_multipart_upload(self, **_kwargs):
+            return {}
+
+        def get_bucket_cors(self, **_kwargs):
+            return {
+                "CORSRules": [{
+                    "AllowedOrigins": ["http://localhost:4517", "http://localhost:4518"],
+                    "AllowedMethods": ["PUT", "POST"],
+                    "AllowedHeaders": ["*"],
+                    "ExposeHeaders": ["ETag"],
+                }]
+            }
+
+    monkeypatch.setattr(storage_service.settings, "UPLOAD_STORAGE_BACKEND", "s3")
+    monkeypatch.setattr(storage_service.settings, "S3_ENDPOINT", "https://s3.example.com")
+    monkeypatch.setattr(storage_service.settings, "S3_BUCKET", "bucket")
+    monkeypatch.setattr(storage_service.settings, "S3_ACCESS_KEY_ID", "access-key")
+    monkeypatch.setattr(storage_service.settings, "S3_SECRET_ACCESS_KEY", "secret-key")
+    monkeypatch.setattr(storage_service.settings, "CORS_ORIGINS", ["http://localhost:4517", "http://localhost:4518"])
+    monkeypatch.setattr(storage_service, "_get_s3_client", lambda: FakeS3Client())
+    storage_service.reset_storage_status_cache()
+
+    status = storage_service.get_storage_status(force_refresh=True)
+
+    assert status["backend"] == "s3"
+    assert status["storage_status"] == "available"
+    assert status["storage_reason_code"] == ""
+    assert status["direct_upload_supported"] is True
+
+
+def test_storage_status_keeps_s3_available_when_cors_blocks_direct_upload(monkeypatch) -> None:
+    class FakeS3Client:
+        def head_bucket(self, **_kwargs):
+            return {}
+
+        def put_object(self, **_kwargs):
+            return {}
+
+        def delete_object(self, **_kwargs):
+            return {}
+
+        def create_multipart_upload(self, **_kwargs):
+            return {"UploadId": "upload-id"}
+
+        def abort_multipart_upload(self, **_kwargs):
+            return {}
+
+        def get_bucket_cors(self, **_kwargs):
+            return {"CORSRules": []}
+
+    monkeypatch.setattr(storage_service.settings, "UPLOAD_STORAGE_BACKEND", "s3")
+    monkeypatch.setattr(storage_service.settings, "S3_ENDPOINT", "https://s3.example.com")
+    monkeypatch.setattr(storage_service.settings, "S3_BUCKET", "bucket")
+    monkeypatch.setattr(storage_service.settings, "S3_ACCESS_KEY_ID", "access-key")
+    monkeypatch.setattr(storage_service.settings, "S3_SECRET_ACCESS_KEY", "secret-key")
+    monkeypatch.setattr(storage_service.settings, "CORS_ORIGINS", ["http://localhost:4517"])
+    monkeypatch.setattr(storage_service, "_get_s3_client", lambda: FakeS3Client())
+    storage_service.reset_storage_status_cache()
+
+    status = storage_service.get_storage_status(force_refresh=True)
+
+    assert status["backend"] == "s3"
+    assert status["storage_status"] == "available"
+    assert status["storage_reason_code"] == "s3_cors_direct_upload_unavailable"
+    assert status["direct_upload_supported"] is False
+
+
 @pytest.mark.asyncio
 async def test_upload_policy_exposes_surface_limits(monkeypatch) -> None:
     monkeypatch.setattr(storage_service, "get_storage_status", lambda: {

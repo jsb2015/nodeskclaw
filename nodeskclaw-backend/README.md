@@ -485,6 +485,8 @@ NetworkPolicy 相关配置项（通过「组织设置 > 网络」页面管理，
 
 S3 全部必需配置为空且 `UPLOAD_STORAGE_BACKEND=auto` 时系统使用本地文件系统存储。`UPLOAD_STORAGE_BACKEND=s3` 或 S3 必需项部分配置时，存储不可用会通过 `/api/v1/upload/policy` 返回，上传不会静默回退到 local。
 
+S3 健康检查会验证 bucket 可访问、临时对象写入/删除、multipart upload 创建/中止权限，以及 bucket CORS 是否允许当前 `CORS_ORIGINS` 的浏览器直传并暴露 `ETag`。bucket 或 multipart 权限失败时上传整体不可用；仅 CORS 不满足时仍可走后端分片代理，`direct_upload_supported=false`。
+
 ### 启动
 
 推荐使用项目根目录的一键启动脚本（同时启动后端和前端）：

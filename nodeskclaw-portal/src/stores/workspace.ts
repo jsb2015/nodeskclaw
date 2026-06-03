@@ -261,8 +261,18 @@ export interface FileReference {
 
 interface UploadSessionInfo {
   session_id: string
+  upload_mode: 'backend_parts' | 's3_multipart'
+  backend: 'local' | 's3'
   part_size_bytes: number
   part_count: number
+}
+
+interface UploadPartSignInfo {
+  part_number: number
+  upload_url: string
+  expires_at: string
+  required_headers: Record<string, string>
+  upload_mode: 's3_multipart'
 }
 
 interface UploadSessionFileResult {
@@ -355,6 +365,36 @@ export const PERMISSION_PRESETS: Record<string, { is_admin: boolean; permissions
   administrator: { is_admin: true, permissions: [] },
   collaborator: { is_admin: false, permissions: ['manage_agents', 'edit_blackboard', 'send_chat', 'edit_topology'] },
   observer: { is_admin: false, permissions: ['send_chat'] },
+}
+
+function toHex(buffer: ArrayBuffer): string {
+  return Array.from(new Uint8Array(buffer))
+    .map((value) => value.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+async function sha256Hex(blob: Blob): Promise<string> {
+  if (!globalThis.crypto?.subtle) {
+    throw new Error('WebCrypto is required for direct upload checksums')
+  }
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', await blob.arrayBuffer())
+  return toHex(digest)
+}
+
+async function uploadS3Part(uploadUrl: string, blob: Blob, requiredHeaders: Record<string, string>): Promise<string> {
+  const response = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: requiredHeaders,
+    body: blob,
+  })
+  if (!response.ok) {
+    throw new Error(`S3 multipart upload failed with ${response.status}`)
+  }
+  const etag = response.headers.get('ETag')
+  if (!etag) {
+    throw new Error('S3 multipart upload response missing ETag')
+  }
+  return etag
 }
 
 export const useWorkspaceStore = defineStore('workspace', () => {
@@ -483,18 +523,33 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         const start = (partNumber - 1) * session.part_size_bytes
         const end = Math.min(start + session.part_size_bytes, file.size)
         const blob = file.slice(start, end)
-        const partRes = await api.put(
-          `/workspaces/${workspaceId}/uploads/sessions/${session.session_id}/parts/${partNumber}`,
-          blob,
-          { headers: { 'Content-Type': 'application/octet-stream' } },
-        )
-        const part = partRes.data.data.part
-        uploadedParts.push({
-          part_number: part.part_number,
-          size: part.size,
-          checksum: part.checksum,
-          etag: part.etag,
-        })
+        if (session.upload_mode === 's3_multipart') {
+          const checksum = `sha256:${await sha256Hex(blob)}`
+          const signRes = await api.post(
+            `/workspaces/${workspaceId}/uploads/sessions/${session.session_id}/parts/${partNumber}/sign`,
+          )
+          const signed = signRes.data.data as UploadPartSignInfo
+          const etag = await uploadS3Part(signed.upload_url, blob, signed.required_headers || {})
+          uploadedParts.push({
+            part_number: partNumber,
+            size: blob.size,
+            checksum,
+            etag,
+          })
+        } else {
+          const partRes = await api.put(
+            `/workspaces/${workspaceId}/uploads/sessions/${session.session_id}/parts/${partNumber}`,
+            blob,
+            { headers: { 'Content-Type': 'application/octet-stream' } },
+          )
+          const part = partRes.data.data.part
+          uploadedParts.push({
+            part_number: part.part_number,
+            size: part.size,
+            checksum: part.checksum,
+            etag: part.etag,
+          })
+        }
       }
 
       const completeRes = await api.post(`/workspaces/${workspaceId}/uploads/sessions/${session.session_id}/complete`, {

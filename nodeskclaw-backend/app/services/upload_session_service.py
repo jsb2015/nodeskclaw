@@ -280,6 +280,34 @@ def _part_count(expected_size: int, part_size_bytes: int) -> int:
     return max(1, math.ceil(expected_size / part_size_bytes))
 
 
+def _upload_mode(policy: dict, expected_size: int) -> str:
+    if (
+        expected_size > 0
+        and policy["backend"] == "s3"
+        and policy["storage_status"] == "available"
+        and policy["direct_upload_supported"]
+    ):
+        return "s3_multipart"
+    return "backend_parts"
+
+
+def _session_upload_mode(session: UploadSession) -> str:
+    return getattr(session, "upload_mode", "backend_parts") or "backend_parts"
+
+
+def _multipart_metadata(
+    *,
+    workspace_id: str,
+    surface: str,
+    filename: str,
+) -> dict[str, str]:
+    return {
+        "workspace_id": workspace_id,
+        "surface": surface,
+        "filename_sha256": hashlib.sha256(filename.encode()).hexdigest(),
+    }
+
+
 def _response_urls(workspace_id: str, session_id: str) -> tuple[str, str]:
     base = f"/api/v1/workspaces/{workspace_id}/uploads/sessions/{session_id}"
     return base, f"{base}/complete"
@@ -367,6 +395,9 @@ async def create_upload_session(
     surface_policy = policy["surfaces"][data.surface]
     part_size_bytes = int(surface_policy.get("chunk_size_bytes") or policy["surfaces"]["large_input"]["chunk_size_bytes"])
     part_size_bytes = max(part_size_bytes, math.ceil(max(data.expected_size, 1) / 10000))
+    upload_mode = _upload_mode(policy, data.expected_size)
+    if upload_mode == "s3_multipart":
+        part_size_bytes = max(part_size_bytes, storage_service.S3_MIN_MULTIPART_PART_BYTES)
     part_count = _part_count(data.expected_size, part_size_bytes)
     expires_at = _session_expires_at()
     parent_path = _validate_parent_path(data.parent_path)
@@ -394,6 +425,19 @@ async def create_upload_session(
         if owner_type == "none" and retention_policy == "manual":
             retention_policy = "expires_at"
 
+    multipart_context = None
+    if upload_mode == "s3_multipart":
+        multipart_context = await storage_service.create_multipart_upload(
+            effective_filename,
+            content_type,
+            workspace_id,
+            metadata=_multipart_metadata(
+                workspace_id=workspace_id,
+                surface=data.surface,
+                filename=effective_filename,
+            ),
+        )
+
     session = UploadSession(
         workspace_id=workspace_id,
         surface=data.surface,
@@ -406,13 +450,13 @@ async def create_upload_session(
         expected_size=data.expected_size,
         received_size=0,
         checksum=checksum,
-        upload_mode="backend_parts",
+        upload_mode=upload_mode,
         storage_backend=str(policy["backend"]),
         part_size_bytes=part_size_bytes,
         part_count=part_count,
         status="pending",
-        storage_key="",
-        provider_upload_id="",
+        storage_key=multipart_context.storage_key if multipart_context else "",
+        provider_upload_id=multipart_context.provider_upload_id if multipart_context else "",
         parent_path=parent_path,
         purpose=purpose,
         owner_type=owner_type,
@@ -423,22 +467,35 @@ async def create_upload_session(
         client_request_id=client_request_id,
         expires_at=expires_at,
     )
-    db.add(session)
-    await db.flush()
-    reservation = await _reserve_quota(
-        db,
-        workspace_id=workspace_id,
-        session_id=session.id,
-        surface=data.surface,
-        actor_type=uploader_type,
-        actor_id=uploader_id,
-        reserved_bytes=data.expected_size,
-        quota_bytes=int(policy["surfaces"]["shared_file"]["max_workspace_total_bytes"]),
-        expires_at=expires_at,
-    )
-    session.quota_reservation_id = reservation.id
-    await db.commit()
-    await db.refresh(session)
+    try:
+        db.add(session)
+        await db.flush()
+        reservation = await _reserve_quota(
+            db,
+            workspace_id=workspace_id,
+            session_id=session.id,
+            surface=data.surface,
+            actor_type=uploader_type,
+            actor_id=uploader_id,
+            reserved_bytes=data.expected_size,
+            quota_bytes=int(policy["surfaces"]["shared_file"]["max_workspace_total_bytes"]),
+            expires_at=expires_at,
+        )
+        session.quota_reservation_id = reservation.id
+        await db.commit()
+        await db.refresh(session)
+    except Exception:
+        if multipart_context is not None:
+            try:
+                await storage_service.abort_multipart_upload(
+                    multipart_context.storage_key,
+                    multipart_context.provider_upload_id,
+                )
+            except Exception:
+                pass
+        if hasattr(db, "rollback"):
+            await db.rollback()
+        raise
     return session
 
 
@@ -478,7 +535,7 @@ async def upload_part(
 ) -> UploadPartUploadResponse:
     session = await get_upload_session(db, workspace_id=workspace_id, session_id=session_id)
     _ensure_session_writable(session)
-    if session.upload_mode != "backend_parts":
+    if _session_upload_mode(session) != "backend_parts":
         raise UploadSessionStateError("errors.upload.direct_upload_unavailable")
     if part_number < 1 or part_number > session.part_count:
         raise BadRequestError("分片序号无效", "errors.upload.part_missing")
@@ -558,9 +615,52 @@ async def sign_part(
 ) -> UploadPartSignResponse:
     session = await get_upload_session(db, workspace_id=workspace_id, session_id=session_id)
     _ensure_session_writable(session)
-    if session.upload_mode != "s3_multipart":
+    if _session_upload_mode(session) != "s3_multipart":
         raise UploadSessionStateError("errors.upload.direct_upload_unavailable")
-    return UploadPartSignResponse(part_number=part_number, upload_mode=session.upload_mode)
+    if part_number < 1 or part_number > session.part_count:
+        raise BadRequestError("分片序号无效", "errors.upload.part_missing")
+
+    remaining_seconds = int((session.expires_at - _now()).total_seconds())
+    signed = await storage_service.sign_multipart_part(
+        session.storage_key,
+        session.provider_upload_id,
+        part_number,
+        expires=max(1, remaining_seconds),
+    )
+
+    existing = (await db.execute(
+        select(UploadPart).where(
+            UploadPart.session_id == session.id,
+            UploadPart.part_number == part_number,
+            UploadPart.status.in_(["signed", "uploaded"]),
+            UploadPart.deleted_at.is_(None),
+        ).order_by(UploadPart.created_at.desc()).limit(1)
+    )).scalar_one_or_none()
+    if existing is None:
+        part = UploadPart(
+            session_id=session.id,
+            workspace_id=workspace_id,
+            part_number=part_number,
+            size=0,
+            checksum="",
+            etag="",
+            storage_key=session.storage_key,
+            presigned_expires_at=signed.expires_at,
+            status="signed",
+        )
+        db.add(part)
+    else:
+        existing.presigned_expires_at = signed.expires_at
+        existing.status = "signed"
+    session.status = "uploading"
+    await db.commit()
+    return UploadPartSignResponse(
+        part_number=part_number,
+        upload_url=signed.upload_url,
+        expires_at=signed.expires_at,
+        required_headers=signed.required_headers,
+        upload_mode=session.upload_mode,
+    )
 
 
 async def _uploaded_parts_for_complete(db: AsyncSession, session: UploadSession) -> list[UploadPart]:
@@ -580,6 +680,56 @@ async def _uploaded_parts_for_complete(db: AsyncSession, session: UploadSession)
     if total != session.expected_size:
         raise BadRequestError("上传文件大小与预期不一致", "errors.upload.checksum_mismatch")
     return parts
+
+
+async def _s3_parts_for_complete(
+    db: AsyncSession,
+    session: UploadSession,
+    data: UploadCompleteRequest,
+) -> tuple[list[UploadPart], list[dict[str, str | int]]]:
+    if data.parts is None:
+        raise BadRequestError("上传分片不完整", "errors.upload.part_missing")
+
+    request_parts = {part.part_number: part for part in data.parts}
+    expected_numbers = list(range(1, session.part_count + 1))
+    if sorted(request_parts) != expected_numbers:
+        raise BadRequestError("上传分片不完整", "errors.upload.part_missing")
+
+    signed_parts = await get_session_parts(db, session.id)
+    signed_by_number = {
+        part.part_number: part
+        for part in signed_parts
+        if part.status in {"signed", "uploaded"}
+    }
+    if sorted(signed_by_number) != expected_numbers:
+        raise BadRequestError("上传分片未签发", "errors.upload.part_missing")
+
+    total = 0
+    completed_parts: list[dict[str, str | int]] = []
+    for index, part_number in enumerate(expected_numbers, 1):
+        request_part = request_parts[part_number]
+        if not request_part.etag:
+            raise BadRequestError("上传分片缺少 ETag", "errors.upload.checksum_mismatch")
+        if request_part.size is None:
+            raise BadRequestError("上传分片缺少大小", "errors.upload.checksum_mismatch")
+        if index < session.part_count and request_part.size < storage_service.S3_MIN_MULTIPART_PART_BYTES:
+            raise BadRequestError("上传分片大小不符合对象存储限制", "errors.upload.checksum_mismatch")
+        normalized_checksum = _normalize_checksum(request_part.checksum) if request_part.checksum else ""
+        signed_part = signed_by_number[part_number]
+        signed_part.size = request_part.size
+        signed_part.checksum = normalized_checksum
+        signed_part.etag = request_part.etag
+        signed_part.storage_key = session.storage_key
+        signed_part.status = "uploaded"
+        total += request_part.size
+        completed_parts.append({
+            "part_number": part_number,
+            "etag": request_part.etag,
+        })
+
+    if total != session.expected_size:
+        raise BadRequestError("上传文件大小与预期不一致", "errors.upload.checksum_mismatch")
+    return list(signed_by_number.values()), completed_parts
 
 
 async def _create_shared_file_from_session(
@@ -684,30 +834,44 @@ async def complete_upload_session(
 ) -> dict:
     session = await get_upload_session(db, workspace_id=workspace_id, session_id=session_id)
     _ensure_session_writable(session)
-    parts = await _uploaded_parts_for_complete(db, session)
-
-    if data.parts is not None:
-        request_parts = {part.part_number: part for part in data.parts}
-        if sorted(request_parts) != list(range(1, session.part_count + 1)):
-            raise BadRequestError("上传分片不完整", "errors.upload.part_missing")
-        for part in parts:
-            request_part = request_parts[part.part_number]
-            if request_part.size is not None and request_part.size != part.size:
-                raise BadRequestError("上传分片大小不一致", "errors.upload.checksum_mismatch")
-            if request_part.checksum and _normalize_checksum(request_part.checksum) != part.checksum:
-                raise BadRequestError("上传分片校验和不一致", "errors.upload.checksum_mismatch")
+    completed_parts: list[dict[str, str | int]] = []
+    upload_mode = _session_upload_mode(session)
+    if upload_mode == "s3_multipart":
+        parts, completed_parts = await _s3_parts_for_complete(db, session, data)
+    else:
+        parts = await _uploaded_parts_for_complete(db, session)
+        if data.parts is not None:
+            request_parts = {part.part_number: part for part in data.parts}
+            if sorted(request_parts) != list(range(1, session.part_count + 1)):
+                raise BadRequestError("上传分片不完整", "errors.upload.part_missing")
+            for part in parts:
+                request_part = request_parts[part.part_number]
+                if request_part.size is not None and request_part.size != part.size:
+                    raise BadRequestError("上传分片大小不一致", "errors.upload.checksum_mismatch")
+                if request_part.checksum and _normalize_checksum(request_part.checksum) != part.checksum:
+                    raise BadRequestError("上传分片校验和不一致", "errors.upload.checksum_mismatch")
 
     expected_checksum = _normalize_checksum(data.checksum) or session.checksum
     storage_key = ""
+    s3_completed = False
     old_storage_key = ""
     try:
-        storage_key, file_size, checksum_hex = await storage_service.upload_stream(
-            _iter_part_files(parts),
-            session.effective_filename,
-            session.content_type,
-            session.workspace_id,
-            max_bytes=session.expected_size,
-        )
+        if upload_mode == "s3_multipart":
+            storage_key = session.storage_key
+            file_size, checksum_hex = await storage_service.complete_multipart_upload(
+                session.storage_key,
+                session.provider_upload_id,
+                completed_parts,
+            )
+            s3_completed = True
+        else:
+            storage_key, file_size, checksum_hex = await storage_service.upload_stream(
+                _iter_part_files(parts),
+                session.effective_filename,
+                session.content_type,
+                session.workspace_id,
+                max_bytes=session.expected_size,
+            )
         checksum = f"sha256:{checksum_hex}"
         if file_size != session.expected_size:
             raise BadRequestError("上传文件大小与预期不一致", "errors.upload.checksum_mismatch")
@@ -764,7 +928,15 @@ async def complete_upload_session(
         session.completed_at = _now()
         await db.commit()
     except Exception:
-        if storage_key:
+        if upload_mode == "s3_multipart" and session.storage_key and not s3_completed:
+            try:
+                await storage_service.abort_multipart_upload(
+                    session.storage_key,
+                    session.provider_upload_id,
+                )
+            except Exception:
+                pass
+        elif storage_key:
             try:
                 await storage_service.delete_file(storage_key)
             except Exception:
@@ -789,7 +961,8 @@ async def complete_upload_session(
             storage_key=storage_key,
         )
         await db.commit()
-    await _delete_path(_part_root(session.id))
+    if upload_mode == "backend_parts":
+        await _delete_path(_part_root(session.id))
     return {
         "session_id": session.id,
         "file": {
@@ -832,5 +1005,11 @@ async def cancel_upload_session(
         if part.status in {"signed", "uploaded"}:
             part.status = "failed"
     await db.commit()
-    await _delete_path(_part_root(session.id))
+    if _session_upload_mode(session) == "s3_multipart":
+        try:
+            await storage_service.abort_multipart_upload(session.storage_key, session.provider_upload_id)
+        except Exception:
+            pass
+    else:
+        await _delete_path(_part_root(session.id))
     return UploadCancelResponse(session_id=session.id, status="cancelled", released=released)

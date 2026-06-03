@@ -11,16 +11,22 @@ import time
 import uuid
 from collections.abc import AsyncIterable, AsyncIterator
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import boto3
 from botocore.config import Config as BotoConfig
+from botocore.exceptions import BotoCoreError, ClientError
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 _client = None
+_storage_status_cache: tuple[float, tuple, dict[str, str | bool]] | None = None
+_STORAGE_STATUS_CACHE_TTL_SECONDS = 30
+S3_MIN_MULTIPART_PART_BYTES = 5 * 1024 * 1024
+S3_PART_SIGN_EXPIRES_SECONDS = 15 * 60
 
 
 class StorageUnavailableError(RuntimeError):
@@ -66,6 +72,19 @@ class DownloadStream:
     chunks: AsyncIterator[bytes]
 
 
+@dataclass(frozen=True)
+class MultipartUploadContext:
+    storage_key: str
+    provider_upload_id: str
+
+
+@dataclass(frozen=True)
+class MultipartPartUploadUrl:
+    upload_url: str
+    expires_at: datetime
+    required_headers: dict[str, str]
+
+
 def _storage_intent() -> str:
     intent = (settings.UPLOAD_STORAGE_BACKEND or "auto").lower()
     return intent if intent in {"auto", "local", "s3"} else "auto"
@@ -105,38 +124,81 @@ def is_configured() -> bool:
     return get_storage_status()["storage_status"] == "available"
 
 
-def get_storage_status() -> dict[str, str | bool]:
+def reset_storage_status_cache() -> None:
+    global _storage_status_cache
+    _storage_status_cache = None
+
+
+def _storage_status_signature() -> tuple:
+    return (
+        _storage_intent(),
+        settings.S3_ENDPOINT,
+        settings.S3_REGION,
+        settings.S3_BUCKET,
+        settings.S3_ACCESS_KEY_ID,
+        settings.S3_SECRET_ACCESS_KEY,
+        settings.S3_KEY_PREFIX,
+        settings.LOCAL_STORAGE_DIR,
+        tuple(settings.CORS_ORIGINS or []),
+    )
+
+
+def _status(
+    *,
+    backend: str,
+    storage_status: str,
+    storage_reason_code: str,
+    direct_upload_supported: bool,
+) -> dict[str, str | bool]:
+    return {
+        "backend": backend,
+        "storage_status": storage_status,
+        "storage_reason_code": storage_reason_code,
+        "direct_upload_supported": direct_upload_supported,
+    }
+
+
+def get_storage_status(*, force_refresh: bool = False) -> dict[str, str | bool]:
+    global _storage_status_cache
+    signature = _storage_status_signature()
+    now = time.time()
+    if not force_refresh and _storage_status_cache is not None:
+        expires_at, cached_signature, cached_status = _storage_status_cache
+        if cached_signature == signature and expires_at > now:
+            return dict(cached_status)
+
+    status = _compute_storage_status()
+    _storage_status_cache = (now + _STORAGE_STATUS_CACHE_TTL_SECONDS, signature, status)
+    return dict(status)
+
+
+def _compute_storage_status() -> dict[str, str | bool]:
     backend = _target_backend()
     if backend == "s3":
         if not _s3_config_complete():
-            return {
-                "backend": "s3",
-                "storage_status": "unavailable",
-                "storage_reason_code": "s3_config_incomplete",
-                "direct_upload_supported": False,
-            }
-        return {
-            "backend": "s3",
-            "storage_status": "available",
-            "storage_reason_code": "",
-            "direct_upload_supported": False,
-        }
+            return _status(
+                backend="s3",
+                storage_status="unavailable",
+                storage_reason_code="s3_config_incomplete",
+                direct_upload_supported=False,
+            )
+        return _s3_health_status()
 
     local_dir = _get_local_dir()
     parent = local_dir if local_dir.exists() else local_dir.parent
     if parent.exists() and os.access(parent, os.W_OK):
-        return {
-            "backend": "local",
-            "storage_status": "available",
-            "storage_reason_code": "",
-            "direct_upload_supported": False,
-        }
-    return {
-        "backend": "local",
-        "storage_status": "unavailable",
-        "storage_reason_code": "local_storage_unwritable",
-        "direct_upload_supported": False,
-    }
+        return _status(
+            backend="local",
+            storage_status="available",
+            storage_reason_code="",
+            direct_upload_supported=False,
+        )
+    return _status(
+        backend="local",
+        storage_status="unavailable",
+        storage_reason_code="local_storage_unwritable",
+        direct_upload_supported=False,
+    )
 
 
 def _ensure_storage_available() -> None:
@@ -204,6 +266,146 @@ def _get_s3_client():
     return _client
 
 
+def _s3_reason(exc: Exception, default: str) -> str:
+    if isinstance(exc, ClientError):
+        code = str(exc.response.get("Error", {}).get("Code", "")).lower()
+        if code in {"accessdenied", "invalidaccesskeyid", "signaturedoesnotmatch"}:
+            return "s3_credentials_invalid"
+        if code in {"nosuchbucket", "notfound", "404"}:
+            return "s3_bucket_unavailable"
+    if isinstance(exc, BotoCoreError):
+        return "s3_endpoint_unavailable"
+    return default
+
+
+def _health_check_key(kind: str) -> str:
+    prefix = settings.S3_KEY_PREFIX.strip("/")
+    base = f".nodeskclaw-health/{kind}/{uuid.uuid4().hex}"
+    return f"{prefix}/{base}" if prefix else base
+
+
+def _s3_probe_bucket_access() -> None:
+    client = _get_s3_client()
+    client.head_bucket(Bucket=settings.S3_BUCKET)
+    key = _health_check_key("write")
+    try:
+        client.put_object(
+            Bucket=settings.S3_BUCKET,
+            Key=key,
+            Body=b"",
+            ContentType="application/octet-stream",
+        )
+    finally:
+        try:
+            client.delete_object(Bucket=settings.S3_BUCKET, Key=key)
+        except Exception:
+            logger.warning("S3 health check cleanup failed", exc_info=True)
+
+
+def _s3_probe_multipart_access() -> None:
+    client = _get_s3_client()
+    key = _health_check_key("multipart")
+    upload_id = ""
+    try:
+        resp = client.create_multipart_upload(
+            Bucket=settings.S3_BUCKET,
+            Key=key,
+            ContentType="application/octet-stream",
+            Metadata={"nodeskclaw_health": "multipart"},
+        )
+        upload_id = str(resp.get("UploadId") or "")
+    finally:
+        if upload_id:
+            try:
+                client.abort_multipart_upload(
+                    Bucket=settings.S3_BUCKET,
+                    Key=key,
+                    UploadId=upload_id,
+                )
+            except Exception:
+                logger.warning("S3 multipart health check abort failed", exc_info=True)
+
+
+def _matches_cors_value(values: list[str], required: str) -> bool:
+    normalized = {value.lower() for value in values}
+    return "*" in normalized or required.lower() in normalized
+
+
+def _allows_header(values: list[str], required: str) -> bool:
+    normalized = {value.lower() for value in values}
+    return (
+        "*" in normalized
+        or required.lower() in normalized
+        or any(value.endswith("*") and required.lower().startswith(value[:-1]) for value in normalized)
+    )
+
+
+def _s3_cors_allows_direct_upload() -> bool:
+    origins = [origin for origin in (settings.CORS_ORIGINS or []) if origin]
+    if not origins:
+        return False
+    if "*" in origins:
+        return True
+
+    client = _get_s3_client()
+    resp = client.get_bucket_cors(Bucket=settings.S3_BUCKET)
+    rules = resp.get("CORSRules") or []
+    for origin in origins:
+        allowed = False
+        for rule in rules:
+            rule_origins = rule.get("AllowedOrigins") or []
+            rule_methods = rule.get("AllowedMethods") or []
+            rule_headers = rule.get("AllowedHeaders") or []
+            expose_headers = rule.get("ExposeHeaders") or []
+            if not _matches_cors_value(rule_origins, origin):
+                continue
+            if not _matches_cors_value(rule_methods, "PUT") or not _matches_cors_value(rule_methods, "POST"):
+                continue
+            if not _allows_header(rule_headers, "content-type"):
+                continue
+            if not _matches_cors_value(expose_headers, "etag"):
+                continue
+            allowed = True
+            break
+        if not allowed:
+            return False
+    return True
+
+
+def _s3_health_status() -> dict[str, str | bool]:
+    try:
+        _s3_probe_bucket_access()
+    except Exception as exc:
+        return _status(
+            backend="s3",
+            storage_status="unavailable",
+            storage_reason_code=_s3_reason(exc, "s3_bucket_unavailable"),
+            direct_upload_supported=False,
+        )
+
+    try:
+        _s3_probe_multipart_access()
+    except Exception as exc:
+        return _status(
+            backend="s3",
+            storage_status="unavailable",
+            storage_reason_code=_s3_reason(exc, "s3_multipart_unavailable"),
+            direct_upload_supported=False,
+        )
+
+    try:
+        cors_allows_direct_upload = _s3_cors_allows_direct_upload()
+    except Exception:
+        cors_allows_direct_upload = False
+
+    return _status(
+        backend="s3",
+        storage_status="available",
+        storage_reason_code="" if cors_allows_direct_upload else "s3_cors_direct_upload_unavailable",
+        direct_upload_supported=cors_allows_direct_upload,
+    )
+
+
 def _s3_upload(file_content: bytes, filename: str, content_type: str, workspace_id: str) -> str:
     client = _get_s3_client()
     key = _build_object_key(workspace_id, filename, include_prefix=True)
@@ -251,6 +453,91 @@ def _s3_copy(source_key: str, target_key: str, content_type: str) -> None:
 def _s3_delete(key: str) -> None:
     client = _get_s3_client()
     client.delete_object(Bucket=settings.S3_BUCKET, Key=key)
+
+
+def _s3_create_multipart_upload(
+    filename: str,
+    content_type: str,
+    workspace_id: str,
+    metadata: dict[str, str],
+) -> MultipartUploadContext:
+    client = _get_s3_client()
+    key = _build_object_key(workspace_id, filename, include_prefix=True)
+    resp = client.create_multipart_upload(
+        Bucket=settings.S3_BUCKET,
+        Key=key,
+        ContentType=content_type,
+        Metadata=metadata,
+    )
+    return MultipartUploadContext(
+        storage_key=key,
+        provider_upload_id=str(resp["UploadId"]),
+    )
+
+
+def _s3_sign_multipart_part(
+    key: str,
+    provider_upload_id: str,
+    part_number: int,
+    expires: int,
+) -> str:
+    client = _get_s3_client()
+    return client.generate_presigned_url(
+        "upload_part",
+        Params={
+            "Bucket": settings.S3_BUCKET,
+            "Key": key,
+            "UploadId": provider_upload_id,
+            "PartNumber": part_number,
+        },
+        ExpiresIn=expires,
+    )
+
+
+def _s3_complete_multipart_upload(
+    key: str,
+    provider_upload_id: str,
+    parts: list[dict[str, str | int]],
+) -> None:
+    client = _get_s3_client()
+    client.complete_multipart_upload(
+        Bucket=settings.S3_BUCKET,
+        Key=key,
+        UploadId=provider_upload_id,
+        MultipartUpload={
+            "Parts": [
+                {"PartNumber": int(part["part_number"]), "ETag": str(part["etag"])}
+                for part in parts
+            ],
+        },
+    )
+
+
+def _s3_abort_multipart_upload(key: str, provider_upload_id: str) -> None:
+    client = _get_s3_client()
+    client.abort_multipart_upload(
+        Bucket=settings.S3_BUCKET,
+        Key=key,
+        UploadId=provider_upload_id,
+    )
+
+
+def _s3_hash_object(key: str) -> tuple[int, str]:
+    client = _get_s3_client()
+    resp = client.get_object(Bucket=settings.S3_BUCKET, Key=key)
+    body = resp["Body"]
+    digest = hashlib.sha256()
+    total = 0
+    try:
+        while True:
+            chunk = body.read(1024 * 1024)
+            if not chunk:
+                break
+            total += len(chunk)
+            digest.update(chunk)
+    finally:
+        body.close()
+    return total, digest.hexdigest()
 
 
 # ── Local filesystem backend ─────────────────────────────
@@ -349,6 +636,85 @@ async def upload_file_object(
         workspace_id,
         max_bytes=max_bytes,
     )
+
+
+async def create_multipart_upload(
+    filename: str,
+    content_type: str,
+    workspace_id: str,
+    *,
+    metadata: dict[str, str] | None = None,
+) -> MultipartUploadContext:
+    _ensure_storage_available()
+    if not _use_s3():
+        raise StorageUnavailableError("direct_upload_unavailable")
+    clean_metadata = {
+        str(key)[:64]: str(value)[:256]
+        for key, value in (metadata or {}).items()
+        if key and value is not None
+    }
+    try:
+        return await asyncio.to_thread(
+            _s3_create_multipart_upload,
+            filename,
+            content_type,
+            workspace_id,
+            clean_metadata,
+        )
+    except Exception as exc:
+        raise StorageUnavailableError(_s3_reason(exc, "s3_multipart_unavailable")) from exc
+
+
+async def sign_multipart_part(
+    key: str,
+    provider_upload_id: str,
+    part_number: int,
+    *,
+    expires: int = S3_PART_SIGN_EXPIRES_SECONDS,
+) -> MultipartPartUploadUrl:
+    _ensure_storage_available()
+    if not _use_s3():
+        raise StorageUnavailableError("direct_upload_unavailable")
+    ttl = max(1, min(expires, S3_PART_SIGN_EXPIRES_SECONDS))
+    try:
+        upload_url = await asyncio.to_thread(
+            _s3_sign_multipart_part,
+            key,
+            provider_upload_id,
+            part_number,
+            ttl,
+        )
+    except Exception as exc:
+        raise StorageUnavailableError(_s3_reason(exc, "s3_presign_unavailable")) from exc
+    return MultipartPartUploadUrl(
+        upload_url=upload_url,
+        expires_at=datetime.now(timezone.utc) + timedelta(seconds=ttl),
+        required_headers={},
+    )
+
+
+async def complete_multipart_upload(
+    key: str,
+    provider_upload_id: str,
+    parts: list[dict[str, str | int]],
+) -> tuple[int, str]:
+    _ensure_storage_available()
+    if not _use_s3():
+        raise StorageUnavailableError("direct_upload_unavailable")
+    try:
+        await asyncio.to_thread(_s3_complete_multipart_upload, key, provider_upload_id, parts)
+        return await asyncio.to_thread(_s3_hash_object, key)
+    except Exception as exc:
+        raise StorageUnavailableError(_s3_reason(exc, "s3_multipart_unavailable")) from exc
+
+
+async def abort_multipart_upload(key: str, provider_upload_id: str) -> None:
+    if not key or not provider_upload_id or not _s3_config_complete():
+        return
+    try:
+        await asyncio.to_thread(_s3_abort_multipart_upload, key, provider_upload_id)
+    except Exception as exc:
+        raise StorageUnavailableError(_s3_reason(exc, "s3_multipart_unavailable")) from exc
 
 
 def _s3_put_fileobj(file_obj, key: str, content_type: str) -> None:

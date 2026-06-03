@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import socket
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -17,6 +18,8 @@ from app.models.workspace_large_input_file import WorkspaceLargeInputFile
 from app.models.workspace_message_file_reference import WorkspaceMessageFileReference
 from app.services import storage_service
 from app.services.upload_policy_service import build_upload_policy
+
+logger = logging.getLogger(__name__)
 
 
 SOURCE_CHAT_ATTACHMENT = "chat_attachment"
@@ -163,15 +166,22 @@ async def expire_upload_sessions(
                 UploadPart.deleted_at.is_(None),
             )
         )).scalars().all()
+        upload_mode = getattr(session, "upload_mode", "backend_parts") or "backend_parts"
         for part in parts:
             part.status = "failed"
-            await enqueue_storage_delete(
-                db,
-                workspace_id=session.workspace_id,
-                source=SOURCE_UPLOAD_PART,
-                source_id=part.id,
-                storage_key=part.storage_key,
-            )
+            if upload_mode == "backend_parts":
+                await enqueue_storage_delete(
+                    db,
+                    workspace_id=session.workspace_id,
+                    source=SOURCE_UPLOAD_PART,
+                    source_id=part.id,
+                    storage_key=part.storage_key,
+                )
+        if upload_mode == "s3_multipart":
+            try:
+                await storage_service.abort_multipart_upload(session.storage_key, session.provider_upload_id)
+            except Exception:
+                logger.warning("Abort expired S3 multipart upload failed", exc_info=True)
     await db.commit()
     return count
 

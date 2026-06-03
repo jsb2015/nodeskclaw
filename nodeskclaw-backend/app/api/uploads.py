@@ -234,7 +234,7 @@ async def sign_upload_part(
             session_id=session_id,
             part_number=part_number,
         )
-    except upload_session_service.UploadSessionStateError as exc:
+    except (storage_service.StorageUnavailableError, upload_session_service.UploadSessionStateError) as exc:
         raise _map_upload_error(exc) from exc
     return _ok(result.model_dump(mode="json"))
 
